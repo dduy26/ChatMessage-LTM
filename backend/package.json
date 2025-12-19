@@ -22,15 +22,16 @@
   "license": "ISC",
   "description": "Backend API using Node.js, Express, Prisma ORM and PostgreSQL",
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/adapter-pg": "^7.2.0",
+    "@prisma/client": "^5.2.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "prisma": "^5.22.0"
+    "pg": "^8.16.3",
+    "prisma": "^5.2.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11",
-    "prisma": "^7.2.0"
+    "nodemon": "^3.1.11"
   }
 }
