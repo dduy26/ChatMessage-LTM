@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// prisma/schema.prisma
+// backend/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Định nghĩa bảng User
+model User {
+  id          Int        @id @default(autoincrement())
+  username    String     @unique
+  email       String     @unique
+  phoneNumber String?    @unique // Dấu ? nghĩa là có thể Null
+  password    String
+  avatar      String?
+  bio         String?
+  fullName    String?  // Dấu hỏi nghĩa là có thể để trống
+
+
+  // Sử dụng Enum cho Status, mặc định là OFFLINE
+  status      UserStatus @default(OFFLINE)
+  
+  // Sử dụng Enum cho Role, mặc định là USER
+  role        Role       @default(USER)
+  
+  isBanned    Boolean    @default(false)
+  banReason   String?
+  
+  lastSeen    DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
+}
+
+// Định nghĩa các giá trị cho phép của Status
+enum UserStatus {
+  ONLINE
+  OFFLINE
+}
+
+// Định nghĩa các giá trị cho phép của Role
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}

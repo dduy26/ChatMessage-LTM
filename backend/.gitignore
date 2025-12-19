@@ -1,0 +1,21 @@
+# Thư viện (Nặng, không up)
+node_modules
+
+# Bảo mật (Chứa mật khẩu, TUYỆT ĐỐI KHÔNG UP)
+.env
+
+# File rác hệ điều hành (Mac/Windows tự sinh ra)
+.DS_Store
+Thumbs.db
+
+# Log lỗi (Không cần thiết)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Thư mục build (Nếu sau này deploy)
+dist/
+build/
+
+# Prisma generated (Như bạn đã để)
+/src/generated/prisma
