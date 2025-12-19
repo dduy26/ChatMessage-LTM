@@ -8,14 +8,22 @@
     "dev": "nodemon server.js",
     "start": "node server.js"
   },
-  "keywords": ["node", "express", "backend", "api"],
+  "keywords": [
+    "node",
+    "express",
+    "backend",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "description": "Backend API using Node.js and Express",
   "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
