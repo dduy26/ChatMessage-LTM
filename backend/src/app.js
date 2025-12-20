@@ -14,5 +14,12 @@ app.use(express.json());
 
 app.use('/api/health', healthRoute);
 app.use('/api/auth', authRoute);
+app.use("/api/users", require("./routes/user.route"));
+app.use("/api/conversations", require("./routes/conversation.route"));
+
+
+app.get("/health", (req, res) => {
+    res.json({ status: "OK" });
+});
 
 module.exports = app;

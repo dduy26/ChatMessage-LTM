@@ -55,3 +55,16 @@ enum Role {
   MODERATOR
   ADMIN
 }
+
+// Định nghĩa bảng Conversation
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  type      ConversationType @default(DIRECT)
+  title     String?
+  createdAt DateTime @default(now()) 
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP 
+}
