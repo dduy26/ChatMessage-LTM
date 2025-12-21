@@ -62,9 +62,22 @@ model Conversation {
   type      ConversationType @default(DIRECT)
   title     String?
   createdAt DateTime @default(now()) 
+
+  messages  Message[]
 }
 
 enum ConversationType {
   DIRECT
   GROUP 
+}
+
+// Định nghĩa bảng Message
+model Message {
+  id             Int          @id @default(autoincrement())
+  content        String
+  senderId       Int
+  conversationId Int
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
