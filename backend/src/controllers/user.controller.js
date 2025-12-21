@@ -27,7 +27,7 @@ class UserController {
             const id = Number(req.params.id);
             const user = await UserService.getById(id);
             if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản!" });
-            req.json(user);
+            res.json(user);
         }catch(err) {
             req.status(400).json({ error: err.message });
         }

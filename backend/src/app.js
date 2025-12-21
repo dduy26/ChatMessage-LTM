@@ -16,7 +16,7 @@ app.use('/api/health', healthRoute);
 app.use('/api/auth', authRoute);
 app.use("/api/users", require("./routes/user.route"));
 app.use("/api/conversations", require("./routes/conversation.route"));
-app.use("/api/conversations", require("./routes/message.route"));
+app.use("/api/messages", require("./routes/message.route"));
 
 
 
