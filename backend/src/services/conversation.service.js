@@ -13,7 +13,7 @@ class ConversationService {
 
     static getById(id) {
         return prisma.conversation.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         });
     }
 

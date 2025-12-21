@@ -21,13 +21,18 @@ class ConversationController {
         }
     } 
     //READ: Id 
-    static async getById(req,res) {
+    static async getById(req, res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.getById(id);
-            if (!convo) return res.status(404).json({ error: "Không tìm thấy!" });
-        }catch(err) {
-            res.status(400).json({ error: err.message });
+            
+            if (!convo) {
+                return res.status(404).json({ error: "Không tìm thấy hội thoại này trong DB!" });
+            }
+
+            return res.json(convo); 
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
         }
     }
     // UPDATE 
