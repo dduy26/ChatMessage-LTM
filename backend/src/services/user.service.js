@@ -13,9 +13,7 @@ class UserService {
     }
 
     static getById() {
-        return prisma.user.findUnique({
-            where: {id},
-        });
+        return prisma.user.findUnique({ where: { id: Number(id) } });
     }
 
     static getByUserName() {

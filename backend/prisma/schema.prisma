@@ -41,6 +41,9 @@ model User {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
+
+  messages     Message[]
+  participants Participant[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -62,9 +65,40 @@ model Conversation {
   type      ConversationType @default(DIRECT)
   title     String?
   createdAt DateTime @default(now()) 
+
+  messages  Message[]
+
+  participants Participant[]
 }
 
 enum ConversationType {
   DIRECT
   GROUP 
 }
+
+// Định nghĩa bảng Message
+model Message {
+  id             Int          @id @default(autoincrement())
+  content        String       @db.Text
+  senderId       Int
+  conversationId Int
+  isEdited       Boolean      @default(false)
+  isDeleted      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sender         User         @relation(fields: [senderId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+// Định nghĩa bảng Participant
+model Participant {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  role           String       @default("MEMBER") // Có thể là ADMIN hoặc MEMBER
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+
