@@ -15,7 +15,7 @@ class ConversationController {
     static async getAll(req,res) {
         try {
             const convos = await ConversationService.getAll();
-            res.json(convos);
+            return res.json(convos);
         } catch(err) {
             res.status(500).json({error: err.message});
         }
