@@ -3,7 +3,7 @@ const MessageService = require("../services/message.service");
 class MessageController {
     static async create(req, res) {
         try {
-            const conversationId = Number(req.params.id || req.params.conversationId);
+            const conversationId = Number(req.params.conversationId);
             const { content, senderId } = req.body;
             const msg = await MessageService.create({
                 content,
@@ -18,7 +18,7 @@ class MessageController {
 
     static async getByConversation(req, res) {
         try {
-            const conversationId = Number(req.params.id || req.params.conversationId);
+            const conversationId = Number(req.params.conversationId);
             const msgs = await MessageService.getByConversation(conversationId);
             res.json(msgs);
         } catch (err) {

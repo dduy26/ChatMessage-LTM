@@ -4,12 +4,17 @@ class ConversationController {
     // CREATE
     static async create(req,res) {
         try {
-            const convo = await ConversationService.create(req.body);
-            res.status(201).json(convo);
-        } catch(err) {
-            res.status(400).json({error: err.message});
-        }
+        const { title, type } = req.body;
+        const convo = await ConversationService.create({
+            title,
+            // Ép kiểu viết hoa để khớp với Enum của Prisma
+            type: type ? type.toUpperCase() : "DIRECT" 
+        });
+        res.status(201).json(convo);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
+}
 
     // READ: ALL 
     static async getAll(req,res) {

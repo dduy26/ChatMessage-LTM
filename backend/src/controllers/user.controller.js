@@ -39,7 +39,7 @@ class UserController {
             const user = await UserService.update(id, req.body);
             res.json(user);
         }catch(err) {
-            req.status(400).json({ error: err.message});
+            res.status(400).json({ error: err.message});
         }
     }
     // DELETE (soft)
