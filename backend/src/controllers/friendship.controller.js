@@ -1,75 +1,50 @@
-    const FriendshipService = require("../services/friendship.service");
+const FriendshipService = require("../services/friendship.service");
 
-    class FriendshipController {
-    // 1. Gửi lời mời kết bạn
-        static async sendRequest(req, res) {
+class FriendshipController{
+    //create 
+    static async sendRequest(req,res){
+        try{
+            const senderId = req.user.id; // chưa đăng nhập thì bị lỗi 
+
+            const receiverId = req.body;
+            const result = await FriendshipService.sendRequest(
+                parseInt(senderId),
+                parseInt(receiverId)
+            );
+            res.status(201).json(result);//nhìn 201 fe sẽ biết tạo thành công 
+        }catch (err){
+            res.status(400).json({ error: err.message }); // lỗi 400 nếu client gửi sai
+        }
+        }
+    // read
+    static async getFriends(req,res){
         try {
-        const requesterId = req.user.id; // Lấy từ Token (User đang đăng nhập)
-        const { targetUserId } = req.body; // Lấy ID người muốn kết bạn
-
-        if (!targetUserId) {
-            return res.status(400).json({ error: "Thiếu targetUserId" });
-        }
-
-        // Ép kiểu User ID sang số nguyên
-        const result = await FriendshipService.sendRequest(
-            parseInt(requesterId),
-            parseInt(targetUserId)
-        );
-        
-        res.status(201).json(result);
-        } catch (error) {
-        res.status(400).json({ error: error.message });
+            const userId= req.user.id;
+            const friends = await FriendshipService.getFriend(parseInt (userId));
+            res.json(friends);
+        } catch (error){
+            res.status(500).json({ error: error.message });//500 lỗi server k mong muốn
         }
     }
-
-    // 2. Chấp nhận lời mời
-    static async acceptRequest(req, res) {
-        try {
-        const { id } = req.params; // Đây là Friendship ID (UUID string) -> Giữ nguyên
-        const userId = req.user.id; // User ID (Int) -> Dùng để check quyền (nếu cần kỹ hơn)
-
-        // Service của bạn đang nhận vào ID của friendship
-        const result = await FriendshipService.acceptRequest(id);
-        
-        res.json({ message: "Đã trở thành bạn bè!", data: result });
-        } catch (error) {
-        res.status(400).json({ error: error.message });
+    // update
+    static async acceptRequest (req,res){
+        try {// req.params: Lấy tham số trên URL.
+            const {id} = req.params;
+            const result = await FriendshipService.acceptRequest(id);
+            res.status(200).json({message : " Đã trở thành bạn bè .", data : result});
+        }catch (error){
+            res.status(400).json({ error: error.message });
         }
     }
-
-    // 3. Hủy kết bạn / Từ chối / Xóa lời mời
-    static async removeFriendship(req, res) {
-        try {
-        const { id } = req.params; // Friendship ID (UUID string)
-        await FriendshipService.remove(id);
-        res.json({ message: "Đã xóa quan hệ bạn bè/lời mời" });
-        } catch (error) {
-        res.status(400).json({ error: error.message });
+    // delete
+    static async removeFriend(req,res){
+        try{
+            const {id} =req.params;
+            await FriendshipService.remove(parseInt(id));
+            res.json({ message: "Đã xóa bạn bè."});
+        } catch (error){
+            res.status(400).json({ error: error.message });
         }
     }
-
-    // 4. Lấy danh sách bạn bè
-    static async getFriends(req, res) {
-        try {
-        const userId = req.user.id;
-        const friends = await FriendshipService.getFriends(parseInt(userId));
-        res.json(friends);
-        } catch (error) {
-        res.status(500).json({ error: error.message });
-        }
-    }
-
-    // 5. Lấy danh sách lời mời đang chờ (Để hiện thông báo)
-    static async getPending(req, res) {
-        try {
-        const userId = req.user.id;
-        const requests = await FriendshipService.getPendingRequests(parseInt(userId));
-        res.json(requests);
-        } catch (error) {
-        res.status(500).json({ error: error.message });
-        }
-    }
-    }
-
-    module.exports = FriendshipController;
+}
+module.exports = FriendshipController;
