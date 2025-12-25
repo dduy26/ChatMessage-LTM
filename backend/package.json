@@ -6,11 +6,15 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon server.js",
+<<<<<<< HEAD
+    "start": "node server.js"
+=======
     "start": "node server.js",
     "prisma:init": "prisma init",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
+>>>>>>> main
   },
   "keywords": [
     "node",
@@ -20,14 +24,24 @@
   ],
   "author": "",
   "license": "ISC",
+<<<<<<< HEAD
+  "description": "Backend API using Node.js and Express",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+=======
   "description": "Backend API using Node.js, Express, Prisma ORM and PostgreSQL",
   "dependencies": {
     "@prisma/client": "^5.2.0",
+>>>>>>> main
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+<<<<<<< HEAD
+    "prisma": "^5.22.0"
+=======
     "prisma": "^5.2.0"
+>>>>>>> main
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

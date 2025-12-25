@@ -13,20 +13,20 @@ class ConversationService {
 
     static getById(id) {
         return prisma.conversation.findUnique({
-        where: { id: Number(id) },
+        where: { id },
         });
     }
 
     static update(id, data) {
         return prisma.conversation.update({
-        where: { id: Number(id) },
+        where: { id },
         data,
         });
     }
 
     static delete(id) {
         return prisma.conversation.delete({
-        where: { id: Number(id) },
+        where: { id },
         });
     }
 }

@@ -4,40 +4,30 @@ class ConversationController {
     // CREATE
     static async create(req,res) {
         try {
-        const { title, type } = req.body;
-        const convo = await ConversationService.create({
-            title,
-            // Ép kiểu viết hoa để khớp với Enum của Prisma
-            type: type ? type.toUpperCase() : "DIRECT" 
-        });
-        res.status(201).json(convo);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+            const convo = await ConversationService.create(req.body);
+            res.status(201).json(convo);
+        } catch(err) {
+            res.status(400).json({error: err.message});
+        }
     }
-}
 
     // READ: ALL 
     static async getAll(req,res) {
         try {
             const convos = await ConversationService.getAll();
-            return res.json(convos);
+            res.json(convos);
         } catch(err) {
             res.status(500).json({error: err.message});
         }
     } 
     //READ: Id 
-    static async getById(req, res) {
+    static async getById(req,res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.getById(id);
-            
-            if (!convo) {
-                return res.status(404).json({ error: "Không tìm thấy hội thoại này trong DB!" });
-            }
-
-            return res.json(convo); 
-        } catch (err) {
-            return res.status(400).json({ error: err.message });
+            if (!convo) return res.status(404).json({ error: "Không tìm thấy!" });
+        }catch(err) {
+            res.status(400).json({ error: err.message });
         }
     }
     // UPDATE 

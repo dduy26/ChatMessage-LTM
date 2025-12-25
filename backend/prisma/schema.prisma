@@ -41,6 +41,43 @@ model User {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
+<<<<<<< HEAD
+  // Relation: User có thể gửi nhiều lời mời và nhận nhiều lời mời
+  sentRequests     Friendship[] @relation("UserSentRequest")
+  receivedRequests Friendship[] @relation("UserReceivedRequest")
+
+  // Relation: User có thể có nhiều Tag
+  tags Tag[]
+}
+
+// Bảng Friendship (Đã sửa để khớp với ID số)
+model Friendship {
+  id          String   @id @default(uuid()) // ID của chính bảng này để String cho an toàn
+  
+  // QUAN TRỌNG: Hai dòng này phải là Int để trỏ về User
+  requesterId Int      
+  addresseeId Int      
+  
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Khai báo quan hệ
+  requester   User @relation("UserSentRequest", fields: [requesterId], references: [id])
+  addressee   User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
+
+  // Đảm bảo không trùng cặp
+  @@unique([requesterId, addresseeId])
+}
+
+// Bảng Tag
+model Tag {
+  id    String @id @default(uuid())
+  name  String @unique
+  color String?  // Trường color: Lưu mã màu (ví dụ: "#FF0000"). // Để dấu ? (String?) để có thể bỏ trống nếu không muốn chọn màu.
+  users User[]
+
+=======
 
   devices      Device[]
   messages     Message[]
@@ -48,6 +85,7 @@ model User {
   notification Notification[]
   createdTasks  Task[]         @relation("CreatedTasks")
   assignedTasks Task[]         @relation("AssignedTasks")
+>>>>>>> main
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -62,6 +100,14 @@ enum Role {
   MODERATOR
   ADMIN
 }
+<<<<<<< HEAD
+// Định nghĩa các giá trị cho phép của FriendshipStatus
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+=======
 
 // Định nghĩa bảng Conversation
 model Conversation {
@@ -179,4 +225,5 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+>>>>>>> main
 }
