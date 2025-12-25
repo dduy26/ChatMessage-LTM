@@ -1,12 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// prisma/schema.prisma
-// backend/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -16,84 +7,205 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Định nghĩa bảng User
+// ==============================
+// 1. MODEL USER (Đã thêm các dòng còn thiếu)
+// ==============================
 model User {
-  id          Int        @id @default(autoincrement())
-  username    String     @unique
-  email       String     @unique
-  phoneNumber String?    @unique // Dấu ? nghĩa là có thể Null
+  id          Int     @id @default(autoincrement())
+  username    String  @unique
+  email       String  @unique
+  phoneNumber String? @unique
   password    String
   avatar      String?
   bio         String?
-  fullName    String?  // Dấu hỏi nghĩa là có thể để trống
+  fullName    String?
 
+  status UserStatus @default(OFFLINE)
+  role   Role       @default(USER)
 
-  // Sử dụng Enum cho Status, mặc định là OFFLINE
-  status      UserStatus @default(OFFLINE)
-  
-  // Sử dụng Enum cho Role, mặc định là USER
-  role        Role       @default(USER)
-  
-  isBanned    Boolean    @default(false)
-  banReason   String?
-  
-  lastSeen    DateTime   @default(now())
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
-  // Relation: User có thể gửi nhiều lời mời và nhận nhiều lời mời
+  isBanned  Boolean @default(false)
+  banReason String?
+
+  lastSeen  DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // --- CÁC MỐI QUAN HỆ (ĐÃ SỬA ĐẦY ĐỦ) ---
+
+  // 1. Friendship
   sentRequests     Friendship[] @relation("UserSentRequest")
   receivedRequests Friendship[] @relation("UserReceivedRequest")
 
-  // Relation: User có thể có nhiều Tag
+  // 2. Chat & Group
+  messages     Message[]
+  participants Participant[]
+
+  // 3. Tag
   tags Tag[]
+
+  // 4. Device & Notification (Thêm mới để sửa lỗi hình 3)
+  devices       Device[]
+  notifications Notification[]
+
+  // 5. Task (Thêm mới để sửa lỗi logic Task)
+  createdTasks  Task[] @relation("CreatedTasks")
+  assignedTasks Task[] @relation("AssignedTasks")
 }
 
-// Bảng Friendship (Đã sửa để khớp với ID số)
+// ==============================
+// 2. MODEL FRIENDSHIP
+// ==============================
 model Friendship {
-  id          String   @id @default(uuid()) // ID của chính bảng này để String cho an toàn
-  
-  // QUAN TRỌNG: Hai dòng này phải là Int để trỏ về User
-  requesterId Int      
-  addresseeId Int      
-  
+  id          String           @id @default(uuid())
+  requesterId Int
+  addresseeId Int
   status      FriendshipStatus @default(PENDING)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  // Khai báo quan hệ
-  requester   User @relation("UserSentRequest", fields: [requesterId], references: [id])
-  addressee   User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
+  requester User @relation("UserSentRequest", fields: [requesterId], references: [id])
+  addressee User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
 
-  // Đảm bảo không trùng cặp
   @@unique([requesterId, addresseeId])
 }
 
-// Bảng Tag
-model Tag {
-  id    String @id @default(uuid())
-  name  String @unique
-  color String?  // Trường color: Lưu mã màu (ví dụ: "#FF0000"). // Để dấu ? (String?) để có thể bỏ trống nếu không muốn chọn màu.
-  users User[]
-
-}
-
-// Định nghĩa các giá trị cho phép của Status
-enum UserStatus {
-  ONLINE
-  OFFLINE
-}
-
-// Định nghĩa các giá trị cho phép của Role
-enum Role {
-  USER
-  MODERATOR
-  ADMIN
-}
-// Định nghĩa các giá trị cho phép của FriendshipStatus
+// Enum cho Friendship (Đặt ở đây là đúng rồi)
 enum FriendshipStatus {
   PENDING
   ACCEPTED
   DECLINED
   BLOCKED
+}
+
+// ==============================
+// 3. CÁC MODEL KHÁC (Giữ nguyên)
+// ==============================
+
+model Tag {
+  id    String  @id @default(uuid())
+  name  String  @unique
+  color String?
+  users User[]
+}
+
+enum UserStatus {
+  ONLINE
+  OFFLINE
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+model Conversation {
+  id        Int              @id @default(autoincrement())
+  type      ConversationType @default(DIRECT)
+  title     String?
+  createdAt DateTime         @default(now())
+
+  messages     Message[]
+  tasks        Task[]
+  participants Participant[]
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+model Message {
+  id             Int      @id @default(autoincrement())
+  content        String   @db.Text
+  senderId       Int
+  conversationId Int
+  isEdited       Boolean  @default(false)
+  isDeleted      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sender       User         @relation(fields: [senderId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model Participant {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  role           String   @default("MEMBER")
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model Device {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  // Lỗi ở hình 3 là do dòng này thiếu đối ứng bên User
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deviceToken String  @unique
+  deviceType  String?
+  deviceName  String?
+
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Notification {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title   String
+  content String
+  type    String
+  isRead  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  creatorId Int
+  creator   User @relation("CreatedTasks", fields: [creatorId], references: [id])
+
+  assigneeId Int?
+  assignee   User? @relation("AssignedTasks", fields: [assigneeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([assigneeId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
