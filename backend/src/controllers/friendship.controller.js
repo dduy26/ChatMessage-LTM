@@ -5,7 +5,6 @@ class FriendshipController{
     static async sendRequest(req,res){
         try{
             const senderId = req.user.id; // chưa đăng nhập thì bị lỗi 
-
             const receiverId = req.body;
             const result = await FriendshipService.sendRequest(
                 parseInt(senderId),
