@@ -21,6 +21,7 @@ app.use("/api/messages", require("./routes/message.route"));
 app.use("/api/participants", require("./routes/participant.route"));
 app.use("/api/devices", require("./routes/device.route"));
 app.use("/api/notifications", require("./routes/notification.route"));
+app.use("/api/tasks", require("./routes/task.route"));
 
 
 app.get("/health", (req, res) => {

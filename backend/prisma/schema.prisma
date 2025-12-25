@@ -42,8 +42,12 @@ model User {
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
 
+  devices      Device[]
   messages     Message[]
   participants Participant[]
+  notification Notification[]
+  createdTasks  Task[]         @relation("CreatedTasks")
+  assignedTasks Task[]         @relation("AssignedTasks")
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -67,7 +71,7 @@ model Conversation {
   createdAt DateTime @default(now()) 
 
   messages  Message[]
-
+  tasks Task[] // Một nhóm có nhiều công việc
   participants Participant[]
 }
 
@@ -101,4 +105,78 @@ model Participant {
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 }
 
+// Định nghĩa bảng Device
+model Device {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  deviceToken  String   @unique // Token định danh duy nhất của thiết bị (hoặc FCM Token)
+  deviceType   String?  // e.g., "ios", "android", "web"
+  deviceName   String?  // e.g., "iPhone 15 Pro", "Chrome Browser"
+  
+  lastActive   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
+  @@index([userId]) // Đánh index để truy vấn thiết bị của 1 user cho nhanh
+}
+
+// Định nghĩa bảng Notification
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String   // Tiêu đề: "Tin nhắn mới"
+  content     String   // Nội dung: "Nam đã gửi cho bạn một ảnh"
+  type        String   // Loại: "MESSAGE", "SYSTEM", "FRIEND_REQUEST"
+  isRead      Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Định nghĩa bảng Task
+model Task {
+  id             Int          @id @default(autoincrement())
+  title          String       // Tiêu đề công việc
+  description    String?      // Mô tả chi tiết
+  status         TaskStatus   @default(TODO)
+  priority       Priority     @default(MEDIUM)
+  dueDate        DateTime?    // Hạn chót
+  
+  // Quan hệ với Hội thoại
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  // Người tạo ra Task này
+  creatorId      Int
+  creator        User         @relation("CreatedTasks", fields: [creatorId], references: [id])
+  
+  // Người được giao Task này (Assignee)
+  assigneeId     Int?
+  assignee       User?        @relation("AssignedTasks", fields: [assigneeId], references: [id])
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+  @@index([assigneeId])
+}
+
+// Định nghĩa các trạng thái của Task
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// Định nghĩa mức độ ưu tiên
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
