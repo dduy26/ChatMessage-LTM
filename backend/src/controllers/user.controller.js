@@ -27,7 +27,7 @@ class UserController {
             const id = Number(req.params.id);
             const user = await UserService.getById(id);
             if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản!" });
-            res.json(user);
+            req.json(user);
         }catch(err) {
             req.status(400).json({ error: err.message });
         }
@@ -39,7 +39,7 @@ class UserController {
             const user = await UserService.update(id, req.body);
             res.json(user);
         }catch(err) {
-            res.status(400).json({ error: err.message});
+            req.status(400).json({ error: err.message});
         }
     }
     // DELETE (soft)
