@@ -18,4 +18,4 @@ dist/
 build/
 
 # Prisma generated (Như bạn đã để)
-/src/generated/prisma
+/src/generated/prisma/
