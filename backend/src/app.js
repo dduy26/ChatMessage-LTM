@@ -24,6 +24,8 @@ app.use("/api/notifications", require("./routes/notification.route"));
 app.use("/api/tasks", require("./routes/task.route"));
 app.use("/api/attachments", require("./routes/attachment.route"));
 app.use("/api/deleted-messages", require("./routes/deletedMessage.route"));
+app.use("/api/blocklist", require("./routes/blocklist.route"));
+app.use("/api/reports", require("./routes/report.route"));
 
 
 app.get("/health", (req, res) => {
