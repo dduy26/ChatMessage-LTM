@@ -4,8 +4,6 @@ const cors = require('cors');
 const healthRoute = require('./routes/health.route');
 
 const authRoute = require('./routes/auth.route');
-const friendshipRoutes = require('./routes/friendship.route');
-const tagRoutes = require('./routes/tag.route');
 const app = express(); // ⬅️ BẮT BUỘC
 
 
@@ -16,7 +14,22 @@ app.use(express.json());
 
 app.use('/api/health', healthRoute);
 app.use('/api/auth', authRoute);
-app.use('/api/friendships', friendshipRoutes);
-app.use('/api/tags', tagRoutes);
+
+app.use("/api/users", require("./routes/user.route"));
+app.use("/api/conversations", require("./routes/conversation.route"));
+app.use("/api/messages", require("./routes/message.route"));
+app.use("/api/participants", require("./routes/participant.route"));
+app.use("/api/devices", require("./routes/device.route"));
+app.use("/api/notifications", require("./routes/notification.route"));
+app.use("/api/tasks", require("./routes/task.route"));
+app.use("/api/attachments", require("./routes/attachment.route"));
+app.use("/api/deleted-messages", require("./routes/deletedMessage.route"));
+app.use("/api/blocklist", require("./routes/blocklist.route"));
+app.use("/api/reports", require("./routes/report.route"));
+
+
+app.get("/health", (req, res) => {
+    res.json({ status: "OK" });
+});
 
 module.exports = app;

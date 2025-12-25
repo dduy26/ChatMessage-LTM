@@ -1,3 +1,12 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// prisma/schema.prisma
+// backend/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,195 +16,167 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==============================
-// 1. MODEL USER (Đã thêm các dòng còn thiếu)
-// ==============================
+// Định nghĩa bảng User
 model User {
-  id          Int     @id @default(autoincrement())
-  username    String  @unique
-  email       String  @unique
-  phoneNumber String? @unique
+  id          Int        @id @default(autoincrement())
+  username    String     @unique
+  email       String     @unique
+  phoneNumber String?    @unique // Dấu ? nghĩa là có thể Null
   password    String
   avatar      String?
   bio         String?
-  fullName    String?
+  fullName    String?  // Dấu hỏi nghĩa là có thể để trống
 
-  status UserStatus @default(OFFLINE)
-  role   Role       @default(USER)
 
-  isBanned  Boolean @default(false)
-  banReason String?
+  // Sử dụng Enum cho Status, mặc định là OFFLINE
+  status      UserStatus @default(OFFLINE)
+  
+  // Sử dụng Enum cho Role, mặc định là USER
+  role        Role       @default(USER)
+  
+  isBanned    Boolean    @default(false)
+  banReason   String?
+  
+  lastSeen    DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?  // Thời gian xóa mềm (nếu có)
 
-  lastSeen  DateTime  @default(now())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  // --- CÁC MỐI QUAN HỆ (ĐÃ SỬA ĐẦY ĐỦ) ---
-
-  // 1. Friendship
-  sentRequests     Friendship[] @relation("UserSentRequest")
-  receivedRequests Friendship[] @relation("UserReceivedRequest")
-
-  // 2. Chat & Group
+  devices      Device[]
   messages     Message[]
   participants Participant[]
-
-  // 3. Tag
-  tags Tag[]
-
-  // 4. Device & Notification (Thêm mới để sửa lỗi hình 3)
-  devices       Device[]
-  notifications Notification[]
-
-  // 5. Task (Thêm mới để sửa lỗi logic Task)
-  createdTasks  Task[] @relation("CreatedTasks")
-  assignedTasks Task[] @relation("AssignedTasks")
+  notification Notification[]
+  createdTasks  Task[]         @relation("CreatedTasks")
+  assignedTasks Task[]         @relation("AssignedTasks")
+  blockedUsers     BlockList[]        @relation("BlockerRelation")
+  blockedBy        BlockList[]        @relation("BlockedRelation")
+  reportsSent     Report[]         @relation("ReporterRelation")
+  reportsReceived Report[]         @relation("ReportedRelation")
 }
 
-// ==============================
-// 2. MODEL FRIENDSHIP
-// ==============================
-model Friendship {
-  id          String           @id @default(uuid())
-  requesterId Int
-  addresseeId Int
-  status      FriendshipStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  requester User @relation("UserSentRequest", fields: [requesterId], references: [id])
-  addressee User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
-
-  @@unique([requesterId, addresseeId])
-}
-
-// Enum cho Friendship (Đặt ở đây là đúng rồi)
-enum FriendshipStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  BLOCKED
-}
-
-// ==============================
-// 3. CÁC MODEL KHÁC (Giữ nguyên)
-// ==============================
-
-model Tag {
-  id    String  @id @default(uuid())
-  name  String  @unique
-  color String?
-  users User[]
-}
-
+// Định nghĩa các giá trị cho phép của Status
 enum UserStatus {
   ONLINE
   OFFLINE
 }
 
+// Định nghĩa các giá trị cho phép của Role
 enum Role {
   USER
   MODERATOR
   ADMIN
 }
 
+// Định nghĩa bảng Conversation
 model Conversation {
-  id        Int              @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   type      ConversationType @default(DIRECT)
   title     String?
-  createdAt DateTime         @default(now())
+  createdAt DateTime @default(now()) 
 
-  messages     Message[]
-  tasks        Task[]
+  messages  Message[]
+  tasks Task[] // Một nhóm có nhiều công việc
   participants Participant[]
+  reports   Report[]
 }
 
 enum ConversationType {
   DIRECT
-  GROUP
+  GROUP 
 }
 
+// Định nghĩa bảng Message
 model Message {
-  id             Int      @id @default(autoincrement())
-  content        String   @db.Text
+  id             Int          @id @default(autoincrement())
+  content        String       @db.Text
   senderId       Int
   conversationId Int
-  isEdited       Boolean  @default(false)
-  isDeleted      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isEdited       Boolean      @default(false)
+  isDeleted      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sender         User         @relation(fields: [senderId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
 
-  sender       User         @relation(fields: [senderId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  attachments    MessageAttachment[]
+  deletedBy      DeletedMessage[]
+  reports         Report[]
 }
 
+// Định nghĩa bảng Participant
 model Participant {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   userId         Int
   conversationId Int
-  role           String   @default("MEMBER")
-  joinedAt       DateTime @default(now())
+  role           String       @default("MEMBER") // Có thể là ADMIN hoặc MEMBER
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
 
-  user         User         @relation(fields: [userId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+ deletedMessages DeletedMessage[]
 }
 
+// Định nghĩa bảng Device
 model Device {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  // Lỗi ở hình 3 là do dòng này thiếu đối ứng bên User
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  deviceToken  String   @unique // Token định danh duy nhất của thiết bị (hoặc FCM Token)
+  deviceType   String?  // e.g., "ios", "android", "web"
+  deviceName   String?  // e.g., "iPhone 15 Pro", "Chrome Browser"
+  
+  lastActive   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
-  deviceToken String  @unique
-  deviceType  String?
-  deviceName  String?
-
-  lastActive DateTime @default(now())
-  createdAt  DateTime @default(now())
-
-  @@index([userId])
+  @@index([userId]) // Đánh index để truy vấn thiết bị của 1 user cho nhanh
 }
 
+// Định nghĩa bảng Notification
 model Notification {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title   String
-  content String
-  type    String
-  isRead  Boolean @default(false)
-
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String   // Tiêu đề: "Tin nhắn mới"
+  content     String   // Nội dung: "Nam đã gửi cho bạn một ảnh"
+  type        String   // Loại: "MESSAGE", "SYSTEM", "FRIEND_REQUEST"
+  isRead      Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
 
   @@index([userId])
 }
 
+// Định nghĩa bảng Task
 model Task {
-  id          Int        @id @default(autoincrement())
-  title       String
-  description String?
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-
+  id             Int          @id @default(autoincrement())
+  title          String       // Tiêu đề công việc
+  description    String?      // Mô tả chi tiết
+  status         TaskStatus   @default(TODO)
+  priority       Priority     @default(MEDIUM)
+  dueDate        DateTime?    // Hạn chót
+  
+  // Quan hệ với Hội thoại
   conversationId Int
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  // Người tạo ra Task này
+  creatorId      Int
+  creator        User         @relation("CreatedTasks", fields: [creatorId], references: [id])
+  
+  // Người được giao Task này (Assignee)
+  assigneeId     Int?
+  assignee       User?        @relation("AssignedTasks", fields: [assigneeId], references: [id])
 
-  creatorId Int
-  creator   User @relation("CreatedTasks", fields: [creatorId], references: [id])
-
-  assigneeId Int?
-  assignee   User? @relation("AssignedTasks", fields: [assigneeId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([conversationId])
   @@index([assigneeId])
 }
 
+// Định nghĩa các trạng thái của Task
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -203,9 +184,71 @@ enum TaskStatus {
   CANCELLED
 }
 
+// Định nghĩa mức độ ưu tiên
 enum Priority {
   LOW
   MEDIUM
   HIGH
   URGENT
+}
+
+// Định nghĩa bảng MessageAttachment
+model MessageAttachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  fileUrl   String   @db.Text    // Link từ Cloudinary
+  publicId  String               // ID để xóa trên Cloudinary
+  fileName  String?              // Tên file gốc
+  fileType  String?              // image, video, pdf...
+  fileSize  Int?                 // Dung lượng file (bytes)
+  createdAt DateTime @default(now())
+
+  // Liên kết ngược lại với Message
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+// Định nghĩa bảng DeletedMessage
+model DeletedMessage {
+  id            Int      @id @default(autoincrement())
+  messageId     Int
+  participantId Int      // Dùng participantId sẽ chuẩn hơn userId trong App Chat
+  createdAt     DateTime @default(now())
+
+  message     Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, participantId])
+}
+
+// Định nghĩa bảng BlockList
+model BlockList {
+  id          Int      @id @default(autoincrement())
+  blockerId   Int      // Người thực hiện chặn
+  blockedId   Int      // Người bị chặn
+  createdAt   DateTime @default(now())
+
+  // Định nghĩa quan hệ
+  blocker     User     @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked     User     @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  // Đảm bảo không chặn một người nhiều lần
+  @@unique([blockerId, blockedId])
+}
+
+// Định nghĩa bảng Report
+model Report {
+  id             Int      @id @default(autoincrement())
+  reporterId     Int      
+  reportedUserId Int?     
+  conversationId Int?     
+  messageId      Int?     
+  reason         String   @db.Text
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+
+  // Quan hệ
+  reporter     User          @relation("ReporterRelation", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User?         @relation("ReportedRelation", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
 }
