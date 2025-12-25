@@ -92,6 +92,9 @@ model Message {
   updatedAt      DateTime     @updatedAt
   sender         User         @relation(fields: [senderId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  attachments    MessageAttachment[]
+  deletedBy      DeletedMessage[]
 }
 
 // Định nghĩa bảng Participant
@@ -103,6 +106,8 @@ model Participant {
   joinedAt       DateTime     @default(now())
   user           User         @relation(fields: [userId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+ deletedMessages DeletedMessage[]
 }
 
 // Định nghĩa bảng Device
@@ -179,4 +184,32 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// Định nghĩa bảng MessageAttachment
+model MessageAttachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  fileUrl   String   @db.Text    // Link từ Cloudinary
+  publicId  String               // ID để xóa trên Cloudinary
+  fileName  String?              // Tên file gốc
+  fileType  String?              // image, video, pdf...
+  fileSize  Int?                 // Dung lượng file (bytes)
+  createdAt DateTime @default(now())
+
+  // Liên kết ngược lại với Message
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+// Định nghĩa bảng DeletedMessage
+model DeletedMessage {
+  id            Int      @id @default(autoincrement())
+  messageId     Int
+  participantId Int      // Dùng participantId sẽ chuẩn hơn userId trong App Chat
+  createdAt     DateTime @default(now())
+
+  message     Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, participantId])
 }
