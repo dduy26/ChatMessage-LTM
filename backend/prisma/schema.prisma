@@ -52,6 +52,7 @@ model User {
   blockedBy        BlockList[]        @relation("BlockedRelation")
   reportsSent     Report[]         @relation("ReporterRelation")
   reportsReceived Report[]         @relation("ReportedRelation")
+  tags Tag[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -78,6 +79,7 @@ model Conversation {
   tasks Task[] // Một nhóm có nhiều công việc
   participants Participant[]
   reports   Report[]
+  tags         ConversationTag[]
 }
 
 enum ConversationType {
@@ -101,6 +103,7 @@ model Message {
   attachments    MessageAttachment[]
   deletedBy      DeletedMessage[]
   reports         Report[]
+  reactions       Reaction[]
 }
 
 // Định nghĩa bảng Participant
@@ -113,7 +116,8 @@ model Participant {
   user           User         @relation(fields: [userId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
- deletedMessages DeletedMessage[]
+  deletedMessages DeletedMessage[]
+  reactions       Reaction[]
 }
 
 // Định nghĩa bảng Device
@@ -251,4 +255,39 @@ model Report {
   reportedUser User?         @relation("ReportedRelation", fields: [reportedUserId], references: [id], onDelete: Cascade)
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+// Định nghĩa bảng Reaction
+model Reaction {
+  id            Int      @id @default(autoincrement())
+  emoji         String   
+  messageId     Int
+  participantId Int      // Đổi từ userId sang participantId
+  createdAt     DateTime @default(now())
+
+  message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Một người (participant) chỉ thả 1 loại cảm xúc vào 1 tin nhắn
+  @@unique([messageId, participantId])
+}
+
+// Định nghĩa bảng Tag
+model Tag {
+  id    String  @id @default(uuid())
+  name  String  @unique
+  color String?
+  users User[]
+  conversationTags ConversationTag[]
+}
+
+// Định nghĩa bảng ConversationTag
+model ConversationTag {
+  conversationId Int
+  tagId          String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, tagId]) // Khóa chính tổ hợp
 }

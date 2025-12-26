@@ -26,6 +26,7 @@ app.use("/api/attachments", require("./routes/attachment.route"));
 app.use("/api/deleted-messages", require("./routes/deletedMessage.route"));
 app.use("/api/blocklist", require("./routes/blocklist.route"));
 app.use("/api/reports", require("./routes/report.route"));
+app.use("/api/reactions", require("./routes/reaction.route"));
 
 
 app.get("/health", (req, res) => {
