@@ -56,6 +56,9 @@ model User {
   sentRequests     Friendship[] @relation("UserSentRequest")
   receivedRequests Friendship[] @relation("UserReceivedRequest")
   pinnedConversations PinnedConversation[]
+
+  isVerified        Boolean            @default(false) // Trạng thái xác thực tài khoản
+  verificationCodes VerificationCode[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -333,4 +336,15 @@ model PinnedConversation {
   // Một người chỉ ghim một cuộc hội thoại một lần
   @@unique([userId, conversationId])
   @@index([userId])
+}
+
+// Định nghĩa bảng VerificationCode
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  code      String   // 6 chữ số
+  type      String   // "REGISTER", "FORGOT_PASSWORD"
+  expiresAt DateTime
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
