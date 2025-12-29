@@ -52,6 +52,7 @@ model User {
   blockedBy        BlockList[]        @relation("BlockedRelation")
   reportsSent     Report[]         @relation("ReporterRelation")
   reportsReceived Report[]         @relation("ReportedRelation")
+  pinnedConversations PinnedConversation[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -77,6 +78,8 @@ model Conversation {
   messages  Message[]
   tasks Task[] // Một nhóm có nhiều công việc
   participants Participant[]
+  pinnedByUsers PinnedConversation[]
+  conversationTags ConversationTag[]
   reports   Report[]
 }
 
@@ -130,6 +133,15 @@ model Device {
   createdAt    DateTime @default(now())
 
   @@index([userId]) // Đánh index để truy vấn thiết bị của 1 user cho nhanh
+}
+model Tag {
+  id        String   @id @default(uuid()) // ID dạng chuỗi (UUID)
+  name      String   @unique              // Tên thẻ (VD: "Gia đình", "Công việc")
+  color     String?                       // Mã màu (VD: "#FF0000")
+  createdAt DateTime @default(now())
+
+  // Quan hệ ngược
+  conversations ConversationTag[]
 }
 
 // Định nghĩa bảng Notification
@@ -251,4 +263,31 @@ model Report {
   reportedUser User?         @relation("ReportedRelation", fields: [reportedUserId], references: [id], onDelete: Cascade)
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+model PinnedConversation {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  createdAt      DateTime     @default(now())
+
+  // Quan hệ
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Ràng buộc: Một người chỉ ghim 1 nhóm 1 lần
+  @@unique([userId, conversationId])
+}
+model ConversationTag {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  tagId          String       // Lưu ý: Tag ID của bạn đang là String (UUID)
+  createdAt      DateTime     @default(now())
+
+  // Quan hệ
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  // Ràng buộc: Một nhóm không thể gắn trùng 1 thẻ 2 lần
+  @@unique([conversationId, tagId])
 }
