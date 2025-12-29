@@ -52,6 +52,24 @@ class UserController {
             res.status(400).json({ error: err.message });
         }
     }
+
+    static async getProfile(req, res) {
+        try {
+            // req.user được lấy từ Auth Middleware sau khi giải mã token
+            const userId = req.user.userId; 
+
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true, username: true } // Không trả về password
+            });
+
+            if (!user) return res.status(404).json({ error: "Người dùng không tồn tại" });
+
+            return res.status(200).json(user);
+        } catch (error) {
+            return res.status(500).json({ error: "Lỗi lấy thông tin: " + error.message });
+        }
+    }
 }
 
 module.exports = UserController;
