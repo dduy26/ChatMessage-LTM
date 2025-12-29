@@ -2,44 +2,32 @@ const prisma = require("../config/prisma");
 
 class UserService {
     static create(data) {
-        return prisma.user.create({data});
+        return prisma.user.create({ data });
     }
 
     static getAll() {
         return prisma.user.findMany({
-            where: {deletedAt : null}, 
-            orderBy: {createdAt: "desc"},
+            where: { deletedAt: null },
+            orderBy: { createdAt: "desc" },
         });
     }
 
-    static getById() {
+    static getById(id) { 
         return prisma.user.findUnique({
-            where: {id},
+            where: { id: Number(id) },
         });
     }
 
-    static getByUserName() {
-        return prisma.user.findUnique({
-            where: {username},
-        });
-    }
-
-    static update(id, data) {
+    static update(id, data) { 
         return prisma.user.update({
-            where: {id}, data,
+            where: { id: Number(id) }, 
+            data,
         });
     }
 
-    static softDelete(id) {
-        return prisma.user.update({
-            where: {id}, 
-            data: {deletedAt: new Date()},
-        });
-    }
-
-    static hartDelete(id) {
+    static hardDelete(id) { 
         return prisma.user.delete({
-            where: {id},
+            where: { id: Number(id) },
         });
     }
 }
