@@ -59,25 +59,24 @@ class AuthService {
         return await transporter.sendMail(mailOptions);
     }
 
-    // 2. Hàm xử lý yêu cầu OTP (Sửa lỗi nhận tham số Object)
+    // 2. Hàm xử lý yêu cầu OTP 
     static async requestOTP({ email, type }) {
-        // Tìm User dựa trên email (Đảm bảo email là String)
-        const user = await prisma.user.findUnique({
-            where: { email: email }
+        // 1. Tìm User (Lúc này email đã là chuỗi String chuẩn)
+        const user = await prisma.user.findUnique({ 
+            where: { email: email } 
         });
 
         if (!user) throw new Error("Email không tồn tại trong hệ thống!");
 
-        // Dọn dẹp: Xóa các mã cũ cùng loại của user này
+        // 2. Dọn dẹp mã cũ
         await prisma.verificationCode.deleteMany({
             where: { userId: user.id, type: type }
         });
 
-        // Tạo mã mới và thời gian hết hạn
+        // 3. Tạo mã mới
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-        // Lưu vào Database
         await prisma.verificationCode.create({
             data: {
                 code,
@@ -87,7 +86,7 @@ class AuthService {
             }
         });
 
-        // Gọi hàm gửi email thật
+        // 4. Gửi email
         await this.sendEmailOTP(email, code, type);
 
         return { userId: user.id, email: user.email };

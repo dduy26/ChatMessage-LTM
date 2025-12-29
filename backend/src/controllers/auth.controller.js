@@ -2,52 +2,47 @@ const AuthService = require("../services/auth.service");
 const prisma = require("../config/prisma");
 
 class AuthController {
-    // SỬA TẠI ĐÂY: Phải là (req, res) để lấy dữ liệu và trả về phản hồi
-    static async requestOTP(req, res) { 
+    static async requestOTP(req, res) {
         try {
-            // 1. Lấy dữ liệu từ body của request
             const { email, type } = req.body;
             
-            // Kiểm tra dữ liệu đầu vào
+            console.log("Dữ liệu nhận được:", { email, type });
+
             if (!email || !type) {
-                return res.status(400).json({ error: "Email và type là bắt buộc" });
+                return res.status(400).json({ error: "Thiếu email hoặc loại xác thực (type)" });
             }
 
-            // 2. Tìm User trong DB
             const user = await prisma.user.findUnique({ where: { email } });
-            
             if (!user) {
-                return res.status(400).json({ error: "Email không tồn tại trong hệ thống" });
+                return res.status(400).json({ error: "Email này chưa được đăng ký trong hệ thống" });
             }
 
-            // 3. Gọi Service: Phải bọc { email, type } trong dấu ngoặc nhọn 
-            // để truyền dưới dạng 1 Object duy nhất khớp với Service
+            // Truyền vào 1 Object duy nhất
             const result = await AuthService.requestOTP({ email, type });
 
-            // Trả về phản hồi thành công
             return res.status(200).json({ 
-                message: `Mã OTP xác minh ${type} đã được gửi về email của bạn`,
+                message: `Mã OTP xác minh ${type} đã được gửi thành công`,
                 userId: result.userId 
             });
+
         } catch (error) {
-            console.error("Lỗi tại AuthController:", error.message);
-            // res lúc này đã được định nghĩa ở tham số hàm nên sẽ không còn lỗi ReferenceError
-            return res.status(500).json({ error: "Lỗi hệ thống: " + error.message });
+            console.error("LỖI CHI TIẾT:", error);
+            return res.status(500).json({ 
+                error: "Lỗi hệ thống: " + error.message 
+            });
         }
     }
 
     static async verifyOTP(req, res) {
         try {
             const { userId, code, type } = req.body;
-            
             if (!userId || !code || !type) {
-                return res.status(400).json({ error: "Thiếu thông tin xác thực" });
+                return res.status(400).json({ error: "Vui lòng nhập đầy đủ userId, code và type" });
             }
 
-            // Gọi logic xác thực mã từ Service
             await AuthService.verifyOTP(userId, code, type);
-            
-            return res.status(200).json({ message: "Xác minh mã thành công!" });
+            return res.status(200).json({ message: "Xác minh thành công!" });
+
         } catch (error) {
             return res.status(400).json({ error: error.message });
         }
