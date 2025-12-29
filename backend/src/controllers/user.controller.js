@@ -29,7 +29,7 @@ class UserController {
             if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản!" });
             req.json(user);
         }catch(err) {
-            req.status(400).json({ error: err.message });
+            res.status(400).json({ error: err.message });
         }
     }
     // UPDATE
@@ -39,17 +39,18 @@ class UserController {
             const user = await UserService.update(id, req.body);
             res.json(user);
         }catch(err) {
-            req.status(400).json({ error: err.message});
+            res.status(400).json({ error: err.message});
         }
     }
     // DELETE (soft)
     static async remove(req, res) {
         try {
             const id = Number(req.params.id);
-            const user = await UserService.softDelete(id);
-            res.json({ message: "Xóa tài khoản!", user });
+            // Dùng hardDelete để xóa sạch khỏi DB phục vụ việc test đăng ký lại
+            const user = await UserService.hardDelete(id); 
+            res.json({ message: "Đã xóa vĩnh viễn tài khoản!", user });
         } catch(err) {
-            res.status(400).json({ error: err.message });
+            res.status(400).json({ error: "Không thể xóa: " + err.message });
         }
     }
 
