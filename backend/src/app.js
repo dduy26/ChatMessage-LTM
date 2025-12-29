@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+require("dotenv").config();
 
 const healthRoute = require('./routes/health.route');
 
@@ -27,7 +28,13 @@ app.use("/api/deleted-messages", require("./routes/deletedMessage.route"));
 app.use("/api/blocklist", require("./routes/blocklist.route"));
 app.use("/api/reports", require("./routes/report.route"));
 app.use("/api/reactions", require("./routes/reaction.route"));
+app.use("/api/conversation-tags", require("./routes/conversationTag.route"));
+app.use("/api/tags", require("./routes/tag.route"));
+app.use("/api/friendships", require("./routes/friendship.route"));
+app.use("/api/pinned", require("./routes/pinned.route"));
 
+const AuthRoutes = require("./routes/auth.route");
+app.use("/api/auth", AuthRoutes);
 
 app.get("/health", (req, res) => {
     res.json({ status: "OK" });
