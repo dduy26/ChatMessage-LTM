@@ -53,6 +53,9 @@ model User {
   reportsSent     Report[]         @relation("ReporterRelation")
   reportsReceived Report[]         @relation("ReportedRelation")
   tags Tag[]
+  sentRequests     Friendship[] @relation("UserSentRequest")
+  receivedRequests Friendship[] @relation("UserReceivedRequest")
+  pinnedConversations PinnedConversation[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -80,6 +83,7 @@ model Conversation {
   participants Participant[]
   reports   Report[]
   tags         ConversationTag[]
+  pinnedConversations PinnedConversation[]
 }
 
 enum ConversationType {
@@ -290,4 +294,43 @@ model ConversationTag {
   tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, tagId]) // Khóa chính tổ hợp
+}
+
+// Định nghĩa bảng Friendship
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId Int
+  addresseeId Int
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester User @relation("UserSentRequest", fields: [requesterId], references: [id])
+  addressee User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+}
+
+// Enum cho Friendship (Đặt ở đây là đúng rồi)
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+// Định nghĩa bảng PinnedConversation
+model PinnedConversation {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  pinnedAt       DateTime     @default(now())
+
+  // Quan hệ
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Một người chỉ ghim một cuộc hội thoại một lần
+  @@unique([userId, conversationId])
+  @@index([userId])
 }
