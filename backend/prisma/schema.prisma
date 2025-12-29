@@ -52,6 +52,13 @@ model User {
   blockedBy        BlockList[]        @relation("BlockedRelation")
   reportsSent     Report[]         @relation("ReporterRelation")
   reportsReceived Report[]         @relation("ReportedRelation")
+  tags Tag[]
+  sentRequests     Friendship[] @relation("UserSentRequest")
+  receivedRequests Friendship[] @relation("UserReceivedRequest")
+  pinnedConversations PinnedConversation[]
+
+  isVerified        Boolean            @default(false) // Trạng thái xác thực tài khoản
+  verificationCodes VerificationCode[]
 }
 
 // Định nghĩa các giá trị cho phép của Status
@@ -78,6 +85,8 @@ model Conversation {
   tasks Task[] // Một nhóm có nhiều công việc
   participants Participant[]
   reports   Report[]
+  tags         ConversationTag[]
+  pinnedConversations PinnedConversation[]
 }
 
 enum ConversationType {
@@ -101,6 +110,7 @@ model Message {
   attachments    MessageAttachment[]
   deletedBy      DeletedMessage[]
   reports         Report[]
+  reactions       Reaction[]
 }
 
 // Định nghĩa bảng Participant
@@ -113,7 +123,8 @@ model Participant {
   user           User         @relation(fields: [userId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
- deletedMessages DeletedMessage[]
+  deletedMessages DeletedMessage[]
+  reactions       Reaction[]
 }
 
 // Định nghĩa bảng Device
@@ -251,4 +262,90 @@ model Report {
   reportedUser User?         @relation("ReportedRelation", fields: [reportedUserId], references: [id], onDelete: Cascade)
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+// Định nghĩa bảng Reaction
+model Reaction {
+  id            Int      @id @default(autoincrement())
+  emoji         String   
+  messageId     Int
+  participantId Int      // Đổi từ userId sang participantId
+  createdAt     DateTime @default(now())
+
+  message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Một người (participant) chỉ thả 1 loại cảm xúc vào 1 tin nhắn
+  @@unique([messageId, participantId])
+}
+
+// Định nghĩa bảng Tag
+model Tag {
+  id    String  @id @default(uuid())
+  name  String  @unique
+  color String?
+  users User[]
+  conversationTags ConversationTag[]
+}
+
+// Định nghĩa bảng ConversationTag
+model ConversationTag {
+  conversationId Int
+  tagId          String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, tagId]) // Khóa chính tổ hợp
+}
+
+// Định nghĩa bảng Friendship
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId Int
+  addresseeId Int
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester User @relation("UserSentRequest", fields: [requesterId], references: [id])
+  addressee User @relation("UserReceivedRequest", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+}
+
+// Enum cho Friendship (Đặt ở đây là đúng rồi)
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+// Định nghĩa bảng PinnedConversation
+model PinnedConversation {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  pinnedAt       DateTime     @default(now())
+
+  // Quan hệ
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Một người chỉ ghim một cuộc hội thoại một lần
+  @@unique([userId, conversationId])
+  @@index([userId])
+}
+
+// Định nghĩa bảng VerificationCode
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  code      String   // 6 chữ số
+  type      String   // "REGISTER", "FORGOT_PASSWORD"
+  expiresAt DateTime
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, type])
 }

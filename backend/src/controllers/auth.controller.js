@@ -1,51 +1,52 @@
-// backend/src/controllers/auth.controller.js
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
+const AuthService = require("../services/auth.service");
+const prisma = require("../config/prisma");
 
-const prisma = new PrismaClient();
+class AuthController {
+    static async requestOTP(req, res) {
+        try {
+            const { email, type } = req.body;
+            
+            console.log("Dữ liệu nhận được:", { email, type });
 
-const register = async (req, res) => {
-    try {
-        const { username, email, password, fullName } = req.body;
-
-        // Kiểm tra user tồn tại
-        const existingUser = await prisma.user.findFirst({
-            where: {
-                OR: [
-                    { username: username },
-                    { email: email }
-                ]
+            if (!email || !type) {
+                return res.status(400).json({ error: "Thiếu email hoặc loại xác thực (type)" });
             }
-        });
 
-        if (existingUser) {
-            return res.status(400).json({ message: "Username hoặc Email đã tồn tại!" });
+            const user = await prisma.user.findUnique({ where: { email } });
+            if (!user) {
+                return res.status(400).json({ error: "Email này chưa được đăng ký trong hệ thống" });
+            }
+
+            // Truyền vào 1 Object duy nhất
+            const result = await AuthService.requestOTP({ email, type });
+
+            return res.status(200).json({ 
+                message: `Mã OTP xác minh ${type} đã được gửi thành công`,
+                userId: result.userId 
+            });
+
+        } catch (error) {
+            console.error("LỖI CHI TIẾT:", error);
+            return res.status(500).json({ 
+                error: "Lỗi hệ thống: " + error.message 
+            });
         }
-
-        // Mã hóa mật khẩu
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Tạo user mới
-        const newUser = await prisma.user.create({
-            data: {
-                username,
-                email,
-                password: hashedPassword,
-                fullName,
-                status: "ONLINE"
-            }
-        });
-
-        return res.status(201).json({
-            message: "Đăng ký thành công!",
-            user: { id: newUser.id, username: newUser.username }
-        });
-
-    } catch (error) {
-        console.error("Lỗi:", error);
-        return res.status(500).json({ message: "Lỗi Server" });
     }
-};
 
-module.exports = { register };
+    static async verifyOTP(req, res) {
+        try {
+            const { userId, code, type } = req.body;
+            if (!userId || !code || !type) {
+                return res.status(400).json({ error: "Vui lòng nhập đầy đủ userId, code và type" });
+            }
+
+            await AuthService.verifyOTP(userId, code, type);
+            return res.status(200).json({ message: "Xác minh thành công!" });
+
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+    }
+}
+
+module.exports = AuthController;

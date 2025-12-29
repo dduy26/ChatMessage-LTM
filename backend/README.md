@@ -34,3 +34,5 @@ GRANT ALL ON FUNCTIONS TO chatapp;
 -> Thêm cấp quyền trong postgres 
 ALTER ROLE chatapp CREATEDB;
 
+npm install dotenv
+npm install socket.io
