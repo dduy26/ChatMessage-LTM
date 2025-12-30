@@ -157,13 +157,17 @@ class AuthController {
             const { email } = req.body;
             if (!email) return res.status(400).json({ error: "Vui lòng cung cấp email" });
 
-            const result = await AuthService.sendEmailOTP(email, "FORGOT_PASSWORD");
+            const result = await AuthService.requestOTP({ 
+                email, 
+                type: "FORGOT_PASSWORD" 
+            });
             
             return res.status(200).json({
                 message: "Mã OTP đặt lại mật khẩu đã được gửi tới email của bạn",
                 userId: result.userId
             });
         } catch (error) {
+            console.error("Lỗi quên mật khẩu:", error); 
             return res.status(500).json({ error: error.message });
         }
     }
