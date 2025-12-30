@@ -78,7 +78,7 @@ class AuthService {
         return { userId: user.id };
     }
 
-    // 3. XÁC MINH MÃ OTP (HÀM BẠN ĐANG THIẾU)
+    // 3. XÁC MINH MÃ OTP 
     static async verifyOTP(userId, code, type) {
         // Tìm mã trong database
         const record = await prisma.verificationCode.findFirst({

@@ -10,4 +10,6 @@ router.post('/verify-otp', AuthController.verifyOTP);
 router.post('/register', AuthController.register);
 router.get('/profile', authMiddleware, UserController.getProfile);
 
+router.post('/login', AuthController.login);
+
 module.exports = router;

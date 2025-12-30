@@ -52,7 +52,7 @@ class AuthController {
 
     static async register(req, res) {
         try {
-            const { email, password, fullName, phoneNumber, username } = req.body;
+            const { email, password, fullName, phoneNumber, username, role } = req.body;
 
             // 1. Kiểm tra đầu vào
             if (!email || !password || !username) {
@@ -77,13 +77,14 @@ class AuthController {
                     username,
                     password: hashedPassword,
                     fullName,
-                    phoneNumber
+                    phoneNumber,
+                    role: role || 'USER'
                 }
             });
 
             // 5. Tạo Token JWT (Để FE lưu lại và dùng cho Middleware)
             const token = jwt.sign(
-                { userId: newUser.id, email: newUser.email },
+                { userId: newUser.id, email: newUser.email, role: newUser.role },
                 process.env.JWT_SECRET,
                 { expiresIn: '7d' } // Token hết hạn sau 7 ngày
             );
@@ -96,6 +97,58 @@ class AuthController {
 
         } catch (error) {
             return res.status(500).json({ error: "Lỗi đăng ký: " + error.message });
+        }
+    }
+
+    static async login(req, res) {
+        try {
+            const { email, password } = req.body;
+
+            // 1. Kiểm tra đầu vào
+            if (!email || !password) {
+                return res.status(400).json({ error: "Email và mật khẩu không được để trống" });
+            }
+
+            // 2. Tìm người dùng qua email
+            const user = await prisma.user.findUnique({
+                where: { email }
+            });
+
+            if (!user) {
+                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+            }
+
+            // 3. So sánh mật khẩu 
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+            }
+
+            // 4. Create Token JWT 
+            const token = jwt.sign(
+                { 
+                    userId: user.id, 
+                    email: user.email,
+                    role: user.role 
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: '7d' }
+            );
+
+            // 5. Trả về kết quả thành công
+            return res.status(200).json({
+                message: "Đăng nhập thành công",
+                token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    fullName: user.fullName,
+                    role: user.role
+                }
+            });
+
+        } catch (error) {
+            return res.status(500).json({ error: "Lỗi đăng nhập: " + error.message });
         }
     }
 }
