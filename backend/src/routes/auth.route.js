@@ -12,4 +12,7 @@ router.get('/profile', authMiddleware, UserController.getProfile);
 
 router.post('/login', AuthController.login);
 
+router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/reset-password', AuthController.resetPassword);
+
 module.exports = router;

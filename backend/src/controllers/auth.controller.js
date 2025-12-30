@@ -151,6 +151,48 @@ class AuthController {
             return res.status(500).json({ error: "Lỗi đăng nhập: " + error.message });
         }
     }
+
+    static async forgotPassword(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email) return res.status(400).json({ error: "Vui lòng cung cấp email" });
+
+            const result = await AuthService.sendEmailOTP(email, "FORGOT_PASSWORD");
+            
+            return res.status(200).json({
+                message: "Mã OTP đặt lại mật khẩu đã được gửi tới email của bạn",
+                userId: result.userId
+            });
+        } catch (error) {
+            return res.status(500).json({ error: error.message });
+        }
+    }
+
+    static async resetPassword(req, res) {
+        try {
+            const { userId, code, newPassword } = req.body;
+
+            if (!userId || !code || !newPassword) {
+                return res.status(400).json({ error: "Thiếu thông tin cần thiết" });
+            }
+
+            // 1. Xác minh mã OTP 
+            await AuthService.verifyOTP(Number(userId), code, "FORGOT_PASSWORD");
+
+            // 2. Nếu OTP đúng, tiến hành Hash mật khẩu mới
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            // 3. Cập nhật vào DB
+            await prisma.user.update({
+                where: { id: Number(userId) },
+                data: { password: hashedPassword }
+            });
+
+            return res.status(200).json({ message: "Đặt lại mật khẩu thành công!" });
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = AuthController;
