@@ -11,7 +11,8 @@ const Register = () => {
     username: "",
     password: "",
     email: "",
-    fullName: ""
+    fullName: "",
+    phoneNumber: ""
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,14 @@ const Register = () => {
             name="email"
             type="email"
             placeholder="Email"
+            required
+            onChange={handleChange}
+            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+          />
+          <input
+            name="phoneNumber"
+            type="text"
+            placeholder="Số điện thoại"
             required
             onChange={handleChange}
             style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
