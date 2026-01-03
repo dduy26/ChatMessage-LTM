@@ -20,5 +20,26 @@ const authMiddleware = (req, res, next) => {
     } catch(error) {
         return res.status(403).json({error: "Phiên đăng nhập hết hạn!"});
     }
+
+    const verifyToken = async(req, res, next) => {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) return res.status(401).json({ message: "Bạn chưa đăng nhập" });
+
+        try {
+            const isBlacklisted = await prisma.blacklistedToken.findUnique({
+                where: { token: token }
+            });
+
+            if (isBlacklisted) {
+                return res.status(401).json({ message: "Token này đã bị hủy (người dùng đã đăng xuất)" });
+            }
+
+            const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+            req.user = decoded;
+            next();
+        } catch(err) {
+            return res.status(403).json({ message: "Token đã hết hạn" });
+        }
+    }
 }
 module.exports = authMiddleware;

@@ -197,6 +197,49 @@ class AuthController {
             return res.status(400).json({ error: error.message });
         }
     }
+
+    static async logout(req, res) {
+        try {
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                return res.status(400).json({ message: "Không tìm thấy token hợp lệ" });
+            }
+
+            const token = authHeader.split(" ")[1];
+
+            // 1. Giải mã token để lấy thời gian hết hạn (exp)
+            const decoded = jwt.decode(token);
+            if (!decoded || !decoded.exp) {
+                return res.status(400).json({ message: "Token không hợp lệ" });
+            }
+
+            const expiresAt = new Date(decoded.exp * 1000);
+
+            // 2. Lưu vào BlackListedToken 
+            await prisma.blacklistedToken.upsert({
+                where: { token: token },
+                update: {}, 
+                create: {
+                    token: token,
+                    expiresAt: expiresAt
+                }
+            });
+
+            // 3. (Tùy chọn) Cập nhật trạng thái người dùng
+            if (req.user && req.user.userId) {
+                await prisma.user.update({
+                    where: { id: parseInt(req.user.userId) },
+                    data: { status: 'OFFLINE', lastSeen: new Date() }
+                });
+            }
+
+            return res.status(200).json({ message: "Đăng xuất thành công, Token đã bị hủy!" });
+
+        } catch (error) {
+            console.error("Lỗi logout:", error);
+            return res.status(500).json({ message: "Có lỗi xảy ra khi đăng xuất" });
+        }
+    }
 }
 
 module.exports = AuthController;

@@ -12,9 +12,15 @@ class UserService {
         });
     }
 
-    static getById(id) { 
-        return prisma.user.findUnique({
-            where: { id: Number(id) },
+    static async getById(id) { 
+        const numericId = Number(id);
+
+        if (!id || isNaN(numericId)) {
+            return null;
+        }
+
+        return await prisma.user.findUnique({
+            where: { id: numericId },
         });
     }
 
