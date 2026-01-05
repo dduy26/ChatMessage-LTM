@@ -349,3 +349,10 @@ model VerificationCode {
   createdAt DateTime @default(now())
   @@unique([userId, type])
 }
+
+model BlackListedToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique // Lưu chuỗi token
+  expiresAt DateTime // Thời điểm token này thực sự hết hạn (để sau này xóa dọn dẹp cho nhẹ DB)
+  createdAt DateTime @default(now())
+}
