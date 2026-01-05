@@ -19,7 +19,12 @@ const authMiddleware = async (req, res, next) => {
         }
 
         const decoded = JWT.verify(token, process.env.JWT_SECRET);
-        console.log("Token giải mã thành công!:", decoded);
+        console.log("=== DEBUG MIDDLEWARE ===");
+        console.log("Token giải mã thành công!:", JSON.stringify(decoded, null, 2));
+        console.log("decoded.userId:", decoded.userId, "(type:", typeof decoded.userId, ")");
+        console.log("decoded.id:", decoded.id, "(type:", typeof decoded.id, ")");
+        console.log("decoded keys:", Object.keys(decoded));
+        
         req.user = decoded;
         
         next();

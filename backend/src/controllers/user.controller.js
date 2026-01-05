@@ -1,6 +1,5 @@
 const UserService = require("../services/user.service");
 
-
 class UserController {
     // CREATE
     static async create(req,res) {
@@ -57,27 +56,70 @@ class UserController {
     static async getProfile(req, res) {
         try {
             // Log để kiểm tra payload thực tế từ Token
-            console.log("Dữ liệu Payload từ Token:", req.user); 
-            console.log("req.user.userId:", req.user.userId);
-            console.log("req.user.id:", req.user.id);
+            console.log("=== DEBUG GET PROFILE ===");
+            console.log("req.user:", req.user);
+            console.log("req.user type:", typeof req.user);
+            console.log("req.user keys:", req.user ? Object.keys(req.user) : "req.user is null/undefined");
+            console.log("Dữ liệu Payload từ Token:", JSON.stringify(req.user, null, 2)); 
+            console.log("req.user.userId:", req.user?.userId, "(type:", typeof req.user?.userId, ")");
+            console.log("req.user.id:", req.user?.id, "(type:", typeof req.user?.id, ")");
 
-            const userId = req.user.userId || req.user.id;
-
-            if (!userId) {
-                console.error("Token không chứa userId hoặc id");
-                return res.status(400).json({ message: "Token không chứa ID hợp lệ" });
+            // Kiểm tra req.user có tồn tại không
+            if (!req.user) {
+                console.error("req.user không tồn tại!");
+                return res.status(401).json({ 
+                    message: "Token không hợp lệ hoặc chưa được xác thực"
+                });
             }
 
-            // Đảm bảo userId là số
-            const numericUserId = Number(userId);
-            console.log("userId sau khi convert:", numericUserId);
+            // Lấy userId từ token - ưu tiên userId trước
+            const userId = req.user.userId ?? req.user.id;
+
+            console.log("userId sau khi extract:", userId, "(type:", typeof userId, ")");
+
+            if (userId === null || userId === undefined) {
+                console.error("Token không chứa userId hoặc id. Token payload:", req.user);
+                return res.status(400).json({ 
+                    message: "Token không chứa ID hợp lệ",
+                    debug: { tokenPayload: req.user }
+                });
+            }
+
+            // Đảm bảo userId là số - xử lý cả trường hợp string
+            let numericUserId;
+            if (typeof userId === 'string') {
+                numericUserId = parseInt(userId, 10);
+                console.log("userId là string, convert từ:", userId, "->", numericUserId);
+            } else {
+                numericUserId = Number(userId);
+                console.log("userId không phải string, convert từ:", userId, "->", numericUserId);
+            }
             
-            if (isNaN(numericUserId) || numericUserId <= 0) {
-                console.error("❌ userId không hợp lệ:", userId);
-                return res.status(400).json({ message: "ID người dùng không hợp lệ" });
+            console.log("userId sau khi convert:", numericUserId, "(type:", typeof numericUserId, ")");
+            
+            // Kiểm tra kỹ hơn
+            if (numericUserId === null || numericUserId === undefined || 
+                isNaN(numericUserId) || numericUserId <= 0 || 
+                !Number.isInteger(numericUserId)) {
+                console.error("userId không hợp lệ sau khi convert:", userId, "->", numericUserId);
+                console.error("Chi tiết:", {
+                    original: userId,
+                    converted: numericUserId,
+                    isNaN: isNaN(numericUserId),
+                    isInteger: Number.isInteger(numericUserId),
+                    isPositive: numericUserId > 0
+                });
+                return res.status(400).json({ 
+                    message: "ID người dùng không hợp lệ",
+                    debug: { 
+                        originalUserId: userId,
+                        convertedUserId: numericUserId,
+                        tokenPayload: req.user 
+                    }
+                });
             }
 
-            console.log("Đang tìm user với id:", numericUserId);
+            console.log("userId hợp lệ, đang tìm user với id:", numericUserId, "(type:", typeof numericUserId, ")");
             const user = await UserService.getById(numericUserId);
 
             if (!user) {
@@ -95,6 +137,7 @@ class UserController {
             return res.status(200).json(user);
         } catch (error) {
             console.error("Lỗi getProfile:", error);
+            console.error("Stack trace:", error.stack);
             return res.status(500).json({ message: "Lỗi hệ thống: " + error.message });
         }
     }

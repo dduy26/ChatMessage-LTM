@@ -83,8 +83,14 @@ class AuthController {
             });
 
             // 5. Tạo Token JWT (Để FE lưu lại và dùng cho Middleware)
+            const userId = Number(newUser.id);
+            if (isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
+                console.error("❌ newUser.id không hợp lệ:", newUser.id);
+                return res.status(500).json({ error: "Lỗi hệ thống: ID người dùng không hợp lệ" });
+            }
+            
             const token = jwt.sign(
-                { userId: newUser.id, email: newUser.email, role: newUser.role },
+                { userId: userId, email: newUser.email, role: newUser.role },
                 process.env.JWT_SECRET,
                 { expiresIn: '7d' } // Token hết hạn sau 7 ngày
             );
@@ -125,17 +131,32 @@ class AuthController {
             }
 
             // 4. Create Token JWT 
-            console.log("Tạo token cho user:", { id: user.id, email: user.email });
+            console.log("=== DEBUG LOGIN ===");
+            console.log("User từ database:", { 
+                id: user.id, 
+                idType: typeof user.id,
+                email: user.email,
+                role: user.role 
+            });
+            
+            // Đảm bảo user.id là số
+            const userId = Number(user.id);
+            if (isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
+                console.error("user.id không hợp lệ:", user.id);
+                return res.status(500).json({ error: "Lỗi hệ thống: ID người dùng không hợp lệ" });
+            }
+            
+            console.log("Tạo token với userId:", userId, "(type:", typeof userId, ")");
             const token = jwt.sign(
                 { 
-                    userId: user.id, 
+                    userId: userId,  // Đảm bảo là số
                     email: user.email,
                     role: user.role 
                 },
                 process.env.JWT_SECRET,
                 { expiresIn: '7d' }
             );
-            console.log("Token đã được tạo:", user.id);
+            console.log("Token đã được tạo với userId:", userId);
 
             // 5. Trả về kết quả thành công
             return res.status(200).json({

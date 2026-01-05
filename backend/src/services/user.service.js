@@ -13,14 +13,22 @@ class UserService {
     }
 
     static async getById(id) { 
-        const numericId = Number(id);
-
-        if (!id || isNaN(numericId)) {
-            console.log("getById: id không hợp lệ:", id);
+        // Kiểm tra id có tồn tại và không phải null/undefined
+        if (id === null || id === undefined || id === '') {
+            console.log("getById: id không hợp lệ (null/undefined/empty):", id);
             return null;
         }
 
-        console.log("getById: Đang tìm user với id:", numericId);
+        // Chuyển đổi sang số
+        const numericId = Number(id);
+
+        // Kiểm tra sau khi convert
+        if (isNaN(numericId) || numericId <= 0 || !Number.isInteger(numericId)) {
+            console.log("getById: id không hợp lệ sau khi convert:", id, "->", numericId);
+            return null;
+        }
+
+        console.log("getById: Đang tìm user với id:", numericId, "(type:", typeof numericId, ")");
         const user = await prisma.user.findUnique({
             where: { id: numericId },
         });
@@ -28,7 +36,7 @@ class UserService {
         if (user) {
             console.log("getById: Tìm thấy user:", { id: user.id, email: user.email, deletedAt: user.deletedAt });
         } else {
-            console.log(" getById: Không tìm thấy user với id:", numericId);
+            console.log("getById: Không tìm thấy user với id:", numericId);
         }
         
         return user;
