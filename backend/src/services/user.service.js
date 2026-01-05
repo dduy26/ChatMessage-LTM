@@ -12,34 +12,21 @@ class UserService {
         });
     }
 
-    static async getById(id) { 
-        // Kiểm tra id có tồn tại và không phải null/undefined
-        if (id === null || id === undefined || id === '') {
-            console.log("getById: id không hợp lệ (null/undefined/empty):", id);
+    static async getById(id) {
+        // Thêm log này để kiểm tra thực tế Controller truyền gì xuống
+        console.log(`UserService.getById nhận được: ${id} (Kiểu dữ liệu: ${typeof id})`);
+
+        const numericId = parseInt(id, 10);
+        
+        if (isNaN(numericId)) {
+            // Log này báo cho bạn biết biến truyền vào đang bị lỗi (thường là undefined)
+            console.error("getById: id không hợp lệ sau khi convert:", id); 
             return null;
         }
 
-        // Chuyển đổi sang số
-        const numericId = Number(id);
-
-        // Kiểm tra sau khi convert
-        if (isNaN(numericId) || numericId <= 0 || !Number.isInteger(numericId)) {
-            console.log("getById: id không hợp lệ sau khi convert:", id, "->", numericId);
-            return null;
-        }
-
-        console.log("getById: Đang tìm user với id:", numericId, "(type:", typeof numericId, ")");
-        const user = await prisma.user.findUnique({
-            where: { id: numericId },
+        return await prisma.user.findUnique({
+            where: { id: numericId }
         });
-        
-        if (user) {
-            console.log("getById: Tìm thấy user:", { id: user.id, email: user.email, deletedAt: user.deletedAt });
-        } else {
-            console.log("getById: Không tìm thấy user với id:", numericId);
-        }
-        
-        return user;
     }
 
     static update(id, data) { 
