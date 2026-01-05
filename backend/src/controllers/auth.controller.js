@@ -125,6 +125,7 @@ class AuthController {
             }
 
             // 4. Create Token JWT 
+            console.log("Tạo token cho user:", { id: user.id, email: user.email });
             const token = jwt.sign(
                 { 
                     userId: user.id, 
@@ -134,6 +135,7 @@ class AuthController {
                 process.env.JWT_SECRET,
                 { expiresIn: '7d' }
             );
+            console.log("Token đã được tạo:", user.id);
 
             // 5. Trả về kết quả thành công
             return res.status(200).json({
@@ -198,6 +200,28 @@ class AuthController {
         }
     }
 
+    static async debugToken(req, res) {
+        try {
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                return res.status(400).json({ message: "Không tìm thấy token" });
+            }
+
+            const token = authHeader.split(" ")[1];
+            const decoded = jwt.decode(token);
+            
+            return res.status(200).json({
+                token: token.substring(0, 20) + "...", // Chỉ hiển thị 20 ký tự đầu
+                tokenLength: token.length,
+                decoded: decoded,
+                userId: decoded?.userId,
+                email: decoded?.email
+            });
+        } catch (error) {
+            return res.status(500).json({ error: error.message });
+        }
+    }
+
     static async logout(req, res) {
         try {
             const authHeader = req.headers.authorization;
@@ -216,7 +240,7 @@ class AuthController {
             const expiresAt = new Date(decoded.exp * 1000);
 
             // 2. Lưu vào BlackListedToken 
-            await prisma.blacklistedToken.upsert({
+            await prisma.blackListedToken.upsert({
                 where: { token: token },
                 update: {}, 
                 create: {

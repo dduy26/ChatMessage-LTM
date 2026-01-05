@@ -16,12 +16,22 @@ class UserService {
         const numericId = Number(id);
 
         if (!id || isNaN(numericId)) {
+            console.log("getById: id không hợp lệ:", id);
             return null;
         }
 
-        return await prisma.user.findUnique({
+        console.log("getById: Đang tìm user với id:", numericId);
+        const user = await prisma.user.findUnique({
             where: { id: numericId },
         });
+        
+        if (user) {
+            console.log("getById: Tìm thấy user:", { id: user.id, email: user.email, deletedAt: user.deletedAt });
+        } else {
+            console.log(" getById: Không tìm thấy user với id:", numericId);
+        }
+        
+        return user;
     }
 
     static update(id, data) { 

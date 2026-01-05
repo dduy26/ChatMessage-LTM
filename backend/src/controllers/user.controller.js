@@ -27,7 +27,7 @@ class UserController {
             const id = Number(req.params.id);
             const user = await UserService.getById(id);
             if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản!" });
-            req.json(user);
+            res.json(user);
         }catch(err) {
             res.status(400).json({ error: err.message });
         }
@@ -55,20 +55,49 @@ class UserController {
     }
 
     static async getProfile(req, res) {
-    try {
-        const userId = req.user.userId || req.user.id; 
+        try {
+            // Log để kiểm tra payload thực tế từ Token
+            console.log("Dữ liệu Payload từ Token:", req.user); 
+            console.log("req.user.userId:", req.user.userId);
+            console.log("req.user.id:", req.user.id);
 
-        if (!userId) return res.status(400).json({ error: "Token không chứa ID hợp lệ" });
+            const userId = req.user.userId || req.user.id;
 
-        const user = await UserService.getById(userId);
+            if (!userId) {
+                console.error("Token không chứa userId hoặc id");
+                return res.status(400).json({ message: "Token không chứa ID hợp lệ" });
+            }
 
-        if (!user) return res.status(404).json({ error: "Người dùng không tồn tại trong DB" });
+            // Đảm bảo userId là số
+            const numericUserId = Number(userId);
+            console.log("userId sau khi convert:", numericUserId);
+            
+            if (isNaN(numericUserId) || numericUserId <= 0) {
+                console.error("❌ userId không hợp lệ:", userId);
+                return res.status(400).json({ message: "ID người dùng không hợp lệ" });
+            }
 
-        return res.status(200).json(user);
-    } catch (error) {
-        return res.status(500).json({ error: "Lỗi hệ thống: " + error.message });
+            console.log("Đang tìm user với id:", numericUserId);
+            const user = await UserService.getById(numericUserId);
+
+            if (!user) {
+                console.error("Không tìm thấy user với id:", numericUserId);
+                return res.status(404).json({ 
+                    message: "Không tìm thấy tài khoản!",
+                    debug: {
+                        userId: numericUserId,
+                        tokenPayload: req.user
+                    }
+                });
+            }
+
+            console.log("Tìm thấy user:", user.id, user.email);
+            return res.status(200).json(user);
+        } catch (error) {
+            console.error("Lỗi getProfile:", error);
+            return res.status(500).json({ message: "Lỗi hệ thống: " + error.message });
+        }
     }
-}
 }
 
 module.exports = UserController;
