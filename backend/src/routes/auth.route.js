@@ -14,5 +14,7 @@ router.post('/login', AuthController.login);
 
 router.post('/forgot-password', AuthController.forgotPassword);
 router.post('/reset-password', AuthController.resetPassword);
+router.post('/logout', authMiddleware, AuthController.logout);
+router.get('/debug-token', AuthController.debugToken); // Endpoint để debug token
 
 module.exports = router;
