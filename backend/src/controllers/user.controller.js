@@ -69,7 +69,7 @@ class UserController {
 
         // 4. Kiểm tra NaN ngay tại Controller để tránh truyền lỗi xuống Service
         if (isNaN(numericUserId)) {
-            console.error("❌ Lỗi: Không tìm thấy userId hợp lệ trong req.user:", req.user);
+            console.error("Lỗi: Không tìm thấy userId hợp lệ trong req.user:", req.user);
             return res.status(400).json({ error: "ID người dùng không hợp lệ (NaN)" });
         }
 
