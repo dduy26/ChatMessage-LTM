@@ -13,21 +13,15 @@ class UserService {
     }
 
     static async getById(id) {
-        // Thêm log này để kiểm tra thực tế Controller truyền gì xuống
-        console.log(`UserService.getById nhận được: ${id} (Kiểu dữ liệu: ${typeof id})`);
-
-        const numericId = parseInt(id, 10);
-        
-        if (isNaN(numericId)) {
-            // Log này báo cho bạn biết biến truyền vào đang bị lỗi (thường là undefined)
-            console.error("getById: id không hợp lệ sau khi convert:", id); 
-            return null;
-        }
-
-        return await prisma.user.findUnique({
-            where: { id: numericId }
-        });
+    const numericId = Number(id); // Chuyển đổi tham số truyền vào thành số
+    if (isNaN(numericId)) {
+        console.error("getById: id không hợp lệ:", id);
+        return null;
     }
+    return await prisma.user.findUnique({
+        where: { id: numericId } // Tìm kiếm theo ID kiểu Int
+    });
+}
 
     static update(id, data) { 
         return prisma.user.update({

@@ -278,7 +278,7 @@ class AuthController {
                 });
             }
 
-            return res.status(200).json({ message: "Đăng xuất thành công, Token đã bị hủy!" });
+            return res.status(200).json({ message: "Đăng xuất thành công!" });
 
         } catch (error) {
             console.error("Lỗi logout:", error);
