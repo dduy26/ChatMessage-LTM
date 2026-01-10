@@ -14,6 +14,9 @@ const authMiddleware = async (req, res, next) => {
             where: { token: token }
         });
 
+        console.log("Token gửi lên:", token);
+        console.log("Tìm thấy trong Blacklist?:", isBlacklisted ? "CÓ" : "KHÔNG");
+
         if (isBlacklisted) {
             return res.status(401).json({ error: "Token đã bị vô hiệu hóa!" });
         }
