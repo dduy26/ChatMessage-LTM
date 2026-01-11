@@ -175,6 +175,56 @@ class AuthController {
         }
     }
 
+static async logout(req, res) {
+        try {
+            // 1. Lấy token từ Header gửi lên (Dạng: "Bearer eyJhbGciOi...")
+            const authHeader = req.headers.authorization;
+            
+            if (!authHeader) {
+                return res.status(200).json({ message: "Đã đăng xuất (Không có token)" });
+            }
+
+            const token = authHeader.split(" ")[1]; // Lấy phần chuỗi token phía sau chữ "Bearer"
+
+            if (!token) {
+                return res.status(200).json({ message: "Đã đăng xuất" });
+            }
+
+            // 2. Giải mã token để lấy thời gian hết hạn (exp)
+            // Chúng ta cần biết bao giờ nó hết hạn để lưu vào DB
+            const decoded = jwt.decode(token);
+            
+            if (decoded) {
+                // Thời gian exp trong JWT tính bằng giây, cần nhân 1000 để ra mili-giây cho Date
+                const expiresAt = new Date(decoded.exp * 1000);
+
+                // 3. Lưu vào bảng Blacklist
+                await prisma.blacklistedToken.create({
+                    data: {
+                        token: token,
+                        expiresAt: expiresAt
+                    }
+                });
+            }
+
+            // 4. (Tùy chọn) Cập nhật trạng thái User thành OFFLINE
+            if (req.user?.userId) {
+                await prisma.user.update({
+                    where: { id: parseInt(req.user.userId) },
+                    data: { status: 'OFFLINE', lastSeen: new Date() }
+                });
+            }
+
+            return res.status(200).json({ message: "Đăng xuất thành công, Token đã bị hủy!" });
+
+        } catch (error) {
+            console.error("Lỗi logout:", error);
+            // Vẫn trả về thành công để FE xóa local storage cho người dùng đỡ kẹt
+            return res.status(200).json({ message: "Đăng xuất thành công" });
+        }
+    }
+
+
     static async forgotPassword(req, res) {
         try {
             const { email } = req.body;
