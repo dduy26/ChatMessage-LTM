@@ -1,6 +1,6 @@
 const AuthService = require("../services/auth.service");
 const prisma = require("../config/prisma");
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 class AuthController {
@@ -85,7 +85,7 @@ class AuthController {
             // 5. Tạo Token JWT (Để FE lưu lại và dùng cho Middleware)
             const userId = Number(newUser.id);
             if (isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
-                console.error("❌ newUser.id không hợp lệ:", newUser.id);
+                console.error("newUser.id không hợp lệ:", newUser.id);
                 return res.status(500).json({ error: "Lỗi hệ thống: ID người dùng không hợp lệ" });
             }
             
@@ -259,7 +259,6 @@ class AuthController {
                     expiresAt: expiresAt
                 }
             });
-
             return res.status(200).json({ message: "Đăng xuất thành công!" });
         } catch (error) {
             return res.status(500).json({ message: "Có lỗi xảy ra khi đăng xuất" });
