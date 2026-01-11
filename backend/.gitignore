@@ -19,3 +19,5 @@ build/
 
 # Prisma generated (Như bạn đã để)
 /src/generated/prisma/
+
+.vscode/
