@@ -64,10 +64,13 @@ const Home = () => {
   const handleLogout = async () => {
     try {
       await api.post("/auth/logout");
-    } catch {
-      // có thể bỏ trống hoặc xử lý nhẹ
+    } catch (err) {
+      console.error("Lỗi đăng xuất:", err);
     }
-    localStorage.clear();
+    // Xóa sạch tất cả các biến đã lưu
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     navigate("/login");
   };
 

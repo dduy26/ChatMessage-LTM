@@ -3,9 +3,10 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; // Import trang mới
 import Home from "./pages/Home";
 import ForgotPassword from "./pages/Forgotpassword";
+
 // Bảo vệ trang chủ (phải đăng nhập mới được vào)
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("accessToken");
   if (!token) return <Navigate to="/login" replace />;
   return children;
 };

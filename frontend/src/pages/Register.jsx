@@ -29,10 +29,20 @@ const Register = () => {
     setError("");
 
     try {
-      await api.post("/auth/register", formData);
-      alert("Đăng ký thành công! Hãy đăng nhập ngay.");
+      // 1. Lưu kết quả trả về vào biến response
+      const response = await api.post("/auth/register", formData);
+      
+      // 2. Log ra để kiểm tra nếu cần 
+      console.log("Dữ liệu từ Server:", response.data);
+
+      // 3. Sử dụng thông báo từ Server nếu Backend có trả về field 'message'
+      const successMsg = response.data?.message || "Đăng ký tài khoản thành công!";
+      alert(successMsg);
+
+      // 4. Chuyển hướng
       navigate("/login"); 
     } catch (err) {
+      // Xử lý lỗi từ Server 
       setError(err.response?.data?.message || "Đăng ký thất bại");
     } finally {
       setLoading(false);
