@@ -72,6 +72,5 @@ frontend/dist/
 # =========================
 *.tgz
 *.tar
-".vscode/" 
-".vscode/" 
-".vscode/" 
+".vscode/"
+
