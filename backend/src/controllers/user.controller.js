@@ -57,7 +57,7 @@ class UserController {
     static async getProfile(req, res) {
         try {
             // req.user được lấy từ Auth Middleware sau khi giải mã token
-            const userId = req.user.userId; 
+            const userId = req.user.userId;
 
             const user = await prisma.user.findUnique({
                 where: { id: userId },
