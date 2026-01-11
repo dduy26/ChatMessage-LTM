@@ -1,6 +1,5 @@
 const UserService = require("../services/user.service");
 
-
 class UserController {
     // CREATE
     static async create(req,res) {
@@ -27,7 +26,7 @@ class UserController {
             const id = Number(req.params.id);
             const user = await UserService.getById(id);
             if (!user) return res.status(404).json({ message: "Không tìm thấy tài khoản!" });
-            req.json(user);
+            res.json(user);
         }catch(err) {
             res.status(400).json({ error: err.message });
         }
@@ -46,7 +45,7 @@ class UserController {
     static async remove(req, res) {
         try {
             const id = Number(req.params.id);
-            // Dùng hardDelete để xóa sạch khỏi DB phục vụ việc test đăng ký lại
+            
             const user = await UserService.hardDelete(id); 
             res.json({ message: "Đã xóa vĩnh viễn tài khoản!", user });
         } catch(err) {
@@ -55,22 +54,42 @@ class UserController {
     }
 
     static async getProfile(req, res) {
-        try {
-            // req.user được lấy từ Auth Middleware sau khi giải mã token
-            const userId = req.user.userId;
-
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true, username: true } // Không trả về password
-            });
-
-            if (!user) return res.status(404).json({ error: "Người dùng không tồn tại" });
-
-            return res.status(200).json(user);
-        } catch (error) {
-            return res.status(500).json({ error: "Lỗi lấy thông tin: " + error.message });
+    try {
+        // 1. Kiểm tra dữ liệu từ Middleware (authMiddleware đã gán decoded vào req.user)
+        if (!req.user) {
+            return res.status(401).json({ error: "Bạn chưa đăng nhập hoặc phiên làm việc hết hạn" });
         }
+
+        // 2. Lấy ĐÚNG trường 'userId' từ Token
+        // Lưu ý: AuthController.login và register đặt tên key là 'userId'
+        const rawId = req.user.userId; 
+
+        // 3. Ép kiểu về số nguyên để đảm bảo khớp với kiểu Int trong Schema
+        const numericUserId = parseInt(rawId, 10);
+
+        // 4. Kiểm tra NaN ngay tại Controller để tránh truyền lỗi xuống Service
+        if (isNaN(numericUserId)) {
+            console.error("Lỗi: Không tìm thấy userId hợp lệ trong req.user:", req.user);
+            return res.status(400).json({ error: "ID người dùng không hợp lệ (NaN)" });
+        }
+
+        // 5. Gọi Service tìm kiếm người dùng
+        const user = await UserService.getById(numericUserId);
+
+        // 6. Kiểm tra nếu không tìm thấy người dùng trong DB
+        if (!user) {
+            return res.status(404).json({ error: "Tài khoản không tồn tại trên hệ thống" });
+        }
+
+        // 7. Loại bỏ mật khẩu trước khi trả về dữ liệu cho FE
+        const { password, ...safeUserData } = user;
+        return res.status(200).json(safeUserData);
+
+    } catch (error) {
+        console.error("Lỗi tại getProfile Controller:", error);
+        return res.status(500).json({ error: "Lỗi hệ thống: " + error.message });
     }
+}
 }
 
 module.exports = UserController;

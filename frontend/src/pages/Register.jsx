@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
-import logo from "../assets/react.svg"; // Nhớ thay bằng logo của bạn
+import logo from "../assets/react.svg"; 
 
 const Register = () => {
   const navigate = useNavigate();
@@ -29,11 +29,9 @@ const Register = () => {
     setError("");
 
     try {
-      // Gọi API Backend: POST /auth/register
       await api.post("/auth/register", formData);
-      
       alert("Đăng ký thành công! Hãy đăng nhập ngay.");
-      navigate("/login"); // Chuyển sang trang đăng nhập
+      navigate("/login"); 
     } catch (err) {
       setError(err.response?.data?.message || "Đăng ký thất bại");
     } finally {
@@ -41,68 +39,72 @@ const Register = () => {
     }
   };
 
+  // Style chung cho Input để đỡ lặp lại code
+  const inputStyle = {
+    padding: "14px",
+    borderRadius: "12px",
+    border: "1px solid #e2e8f0",
+    outline: "none",
+    background: "#f8fafc",
+    fontSize: "14px"
+  };
+
   return (
-    <div style={{ height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", backgroundColor: "#e8f2fc" }}>
-      <div style={{ backgroundColor: "white", padding: "40px", borderRadius: "10px", width: "400px", boxShadow: "0 5px 15px rgba(0,0,0,0.1)", textAlign: "center" }}>
+    // 1. Nền Gradient Tím giống Login
+    <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)", padding: "20px" }}>
+      
+      {/* 2. Card hiệu ứng kính mờ */}
+      <div style={{ backgroundColor: "rgba(255,255,255,0.9)", padding: "40px", borderRadius: "24px", width: "400px", boxShadow: "0 10px 25px rgba(0,0,0,0.1)", textAlign: "center", backdropFilter: "blur(10px)" }}>
         
         <img src={logo} alt="Logo" style={{ width: "60px", marginBottom: "10px" }} />
-        <h2 style={{ color: "#0068ff", marginBottom: "20px" }}>Đăng ký tài khoản</h2>
+        <h2 style={{ color: "#7360f2", marginBottom: "20px", fontWeight: "bold" }}>Tạo tài khoản mới</h2>
 
-        {error && <div style={{ color: "red", marginBottom: "10px", fontSize: "14px" }}>{error}</div>}
+        {error && <div style={{ color: "red", marginBottom: "15px", fontSize: "14px", background:"#fee2e2", padding:"10px", borderRadius:"8px" }}>{error}</div>}
 
-        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
           <input
-            name="fullName"
-            type="text"
-            placeholder="Họ và tên"
-            required
-            onChange={handleChange}
-            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+            name="fullName" type="text" placeholder="Họ và tên" required
+            onChange={handleChange} style={inputStyle}
           />
           <input
-            name="email"
-            type="email"
-            placeholder="Email"
-            required
-            onChange={handleChange}
-            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+            name="email" type="email" placeholder="Email" required
+            onChange={handleChange} style={inputStyle}
           />
           <input
-            name="phoneNumber"
-            type="text"
-            placeholder="Số điện thoại"
-            required
-            onChange={handleChange}
-            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+            name="phoneNumber" type="text" placeholder="Số điện thoại" required
+            onChange={handleChange} style={inputStyle}
           />
           <input
-            name="username"
-            type="text"
-            placeholder="Tên đăng nhập"
-            required
-            onChange={handleChange}
-            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+            name="username" type="text" placeholder="Tên đăng nhập" required
+            onChange={handleChange} style={inputStyle}
           />
           <input
-            name="password"
-            type="password"
-            placeholder="Mật khẩu"
-            required
-            onChange={handleChange}
-            style={{ padding: "12px", borderRadius: "5px", border: "1px solid #ccc", outline: "none" }}
+            name="password" type="password" placeholder="Mật khẩu" required
+            onChange={handleChange} style={inputStyle}
           />
           
           <button 
             type="submit" 
             disabled={loading}
-            style={{ padding: "12px", backgroundColor: "#0068ff", color: "white", border: "none", borderRadius: "5px", fontWeight: "bold", cursor: "pointer", opacity: loading ? 0.7 : 1 }}
+            style={{ 
+                padding: "14px", 
+                backgroundColor: "#7360f2", // Màu Tím Viber
+                color: "white", 
+                border: "none", 
+                borderRadius: "12px", 
+                fontWeight: "bold", 
+                cursor: "pointer", 
+                opacity: loading ? 0.7 : 1,
+                fontSize: "16px",
+                transition: "0.3s"
+            }}
           >
             {loading ? "Đang xử lý..." : "ĐĂNG KÝ"}
           </button>
         </form>
 
-        <div style={{ marginTop: "15px", fontSize: "14px" }}>
-          Bạn đã có tài khoản? <Link to="/login" style={{ color: "#0068ff", textDecoration: "none", fontWeight: "bold" }}>Đăng nhập ngay</Link>
+        <div style={{ marginTop: "20px", fontSize: "14px", color: "#666" }}>
+          Bạn đã có tài khoản? <Link to="/login" style={{ color: "#7360f2", textDecoration: "none", fontWeight: "bold" }}>Đăng nhập ngay</Link>
         </div>
       </div>
     </div>
