@@ -16,7 +16,7 @@ model User {
   avatar      String?
   bio         String?    @db.Text
   fullName    String?
-  status      String     @default("#94a3b8")
+  isOnline    Boolean    @default(false)
   role        Role       @default(USER)
   isBanned    Boolean    @default(false)
   banReason   String?
