@@ -107,6 +107,28 @@ class UserController {
             res.status(400).json({ error: "Lỗi cập nhật: " + error.message });
         }
     }
+
+    static async updateAvatar(req, res) {
+        try {
+            const userId = req.user.userId; // Lấy từ middleware auth
+            if (!req.file) return res.status(400).json({ error: "Vui lòng chọn ảnh" });
+
+            const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+            const updatedUser = await prisma.user.update({
+                where: { id: Number(userId) },
+                data: { avatar: avatarPath }
+            });
+
+            res.status(200).json({ 
+                message: "Cập nhật ảnh đại diện thành công", 
+                avatar: avatarPath,
+                user: updatedUser 
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = UserController;
