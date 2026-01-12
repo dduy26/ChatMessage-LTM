@@ -134,13 +134,13 @@ class AuthController {
             const accessToken = jwt.sign(
                 { userId, email: user.email, role: user.role },
                 process.env.JWT_SECRET,
-                { expiresIn: '10s' } 
+                { expiresIn: '15p' } 
             );
 
             const refreshToken = jwt.sign(
                 { userId },
                 process.env.REFRESH_TOKEN_SECRET || 'refresh_secret_key',
-                { expiresIn: '1m' } 
+                { expiresIn: '7d' } 
             );
 
             // HTTPONLY COOKIE
@@ -181,7 +181,7 @@ class AuthController {
             );
             res.json({ accessToken }); // Trả về Access Token mới
         } catch (err) {
-            res.status(403).send();
+            res.status(401).send();
         }
     }
 
