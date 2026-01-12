@@ -63,16 +63,23 @@ const Home = () => {
   // 5. Đăng xuất
   const handleLogout = async () => {
     try {
-      await api.post("/auth/logout");
+        const res = await api.post("/auth/logout");
+    
+        if (res.data.success) {
+            alert(res.data.message); 
+        }
     } catch (err) {
-      console.error("Lỗi đăng xuất:", err);
+        console.error("Lỗi đăng xuất:", err);
+        alert("Phiên đăng nhập đã kết thúc.");
+    } finally {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
+        
+        // Chuyển hướng về trang login
+        navigate("/login");
     }
-    // Xóa sạch tất cả các biến đã lưu
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
+};
 
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
 
@@ -91,7 +98,13 @@ const Home = () => {
         <div className="sidebar-icon" onClick={handleLogout} title="Đăng xuất">
             <LogOut size={24} />
         </div>
-        <img src={getAvatar(user.fullName, user.avatar)} className="avatar-circle" style={{marginBottom: 20}} alt="Me" />
+        <img 
+          src={getAvatar(user.fullName, user.avatar)} 
+          className="avatar-circle" 
+          style={{ marginBottom: 20, cursor: "pointer" }}
+          alt="Me" 
+          onClick={() => navigate("/profile")} 
+        />
       </div>
 
       {/* --- CỘT 2: DANH SÁCH CHAT --- */}

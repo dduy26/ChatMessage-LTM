@@ -3,6 +3,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; // Import trang mới
 import Home from "./pages/Home";
 import ForgotPassword from "./pages/Forgotpassword";
+import Profile from "./pages/Profile";
 
 // Bảo vệ trang chủ (phải đăng nhập mới được vào)
 const ProtectedRoute = ({ children }) => {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/profile" element={<Profile />} />
         {/* Route bảo mật */}
         <Route
           path="/"

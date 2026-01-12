@@ -22,11 +22,10 @@ const Login = () => {
       const res = await api.post("/auth/login", { email, password });
       
       // 2. Lấy dữ liệu từ response
-      const { accessToken, refreshToken, user } = res.data;
+      const {  user } = res.data;
 
       // 3. Lưu trữ vào LocalStorage cho hệ thống Token và Profile
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
+      
       localStorage.setItem("user", JSON.stringify(user));
 
       console.log("Đăng nhập thành công!");
