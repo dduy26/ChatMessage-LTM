@@ -1,11 +1,28 @@
 const prisma = require("../config/prisma");
 
 class MessageService {
-    // Nâng cấp: Tự động kết nối với Attachments nếu có dữ liệu gửi kèm
-    static create(data) {
-        return prisma.message.create({ 
+    static async create(data) {
+        return await prisma.message.create({
             data,
-            include: { attachments: true } // Trả về kèm file đính kèm sau khi tạo
+            include: {
+                attachments: true,
+
+                // Lấy thêm thông tin người gửi (để Frontend hiển thị Avatar/Tên ngay lập tức)
+                sender: {
+                    select: { id: true, username: true, fullName: true, avatar: true }
+                },
+
+                // Lấy Conversation kèm Participants
+                conversation: {
+                    include: {
+                        participants: {
+                            include: {
+                                user: { select: { id: true, username: true } }
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
@@ -25,7 +42,7 @@ class MessageService {
             where: whereClause,
             include: { 
                 attachments: true, // Lấy kèm file đính kèm
-                sender: { select: { id: true, fullName: true, username: true } } // Lấy thông tin người gửi
+                sender: { select: { id: true, fullName: true, username: true, avatar: true } } // Lấy thông tin người gửi
             },
             orderBy: { createdAt: "asc" },
         });

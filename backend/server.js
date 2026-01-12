@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const prisma = require('./src/config/prisma');
 const jwt = require('jsonwebtoken');
+const socketManager = require('./src/socket/socketManager');
 
 const PORT = process.env.PORT || 5000;
 
@@ -121,62 +122,7 @@ io.use(async(socket, next)=> {
     }
 });
 
-io.on('connection', async (socket) => {
-    try {
-        // Lấy userId từ token đã decode (phải ép kiểu Int nếu DB dùng Int)
-        const rawUserId = socket.user?.userId || socket.user?.id;
-        
-        if (!rawUserId) {
-            console.error("Socket không có userId trong user object:", socket.user);
-            socket.disconnect();
-            return;
-        }
-
-        const userId = Number(rawUserId);
-        
-        if (isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
-            console.error("userId không hợp lệ:", rawUserId, "->", userId);
-            socket.disconnect();
-            return;
-        }
-
-        console.log(`User connected: ${userId} (email: ${socket.user.email || 'N/A'})`);
-        socket.userId = userId; // Lưu userId vào socket để dùng sau
-
-        // Cập nhật trạng thái ONLINE khi kết nối thành công
-        await prisma.user.update({
-            where: { id: userId },
-            data: { status: 'ONLINE' }
-        });
-        
-        socket.broadcast.emit('user_online', userId);
-
-    } catch (error) {
-        console.error("Lỗi khi user kết nối:", error);
-        socket.disconnect();
-    }
-
-    socket.on('disconnect', async () => {
-        const userId = socket.userId;
-        console.log(`User ${userId || 'unknown'} disconnected`);
-        
-        if (userId) {
-            try {
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: { 
-                        status: 'OFFLINE',
-                        lastSeen: new Date() 
-                    }
-                });
-                socket.broadcast.emit('user_offline', userId);
-            } catch (error) {
-                console.error("Lỗi cập nhật status OFFLINE:", error);
-            }
-        }
-    });
-});
-
+socketManager(io);
 // Lắng nghe lỗi server để tránh crash
 server.on('error', (error) => {
     console.error(' Server Error:', error.message);

@@ -55,13 +55,22 @@ const Home = () => {
       });
       setMessages([...messages, res.data]);
       setNewMessage("");
-    } catch (err) { alert("Lỗi gửi tin!"); }
+    } catch  { 
+      alert("Lỗi gửi tin!"); 
+    }
   };
 
   // 5. Đăng xuất
   const handleLogout = async () => {
-    try { await api.post("/auth/logout"); } catch (e) {}
-    localStorage.clear();
+    try {
+      await api.post("/auth/logout");
+    } catch (err) {
+      console.error("Lỗi đăng xuất:", err);
+    }
+    // Xóa sạch tất cả các biến đã lưu
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     navigate("/login");
   };
 
