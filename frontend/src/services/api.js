@@ -48,11 +48,15 @@ api.interceptors.response.use(
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
-                console.error("RefreshToken cũng hết hạn, yêu cầu đăng nhập lại.");
-                memoryToken = null;
-            
-                return Promise.reject(refreshError);
-            }
+    console.error("Phiên đăng nhập hết hạn hoàn toàn.");
+    memoryToken = null;
+    localStorage.removeItem("user");
+    // Điều hướng về login nếu đang không ở trang login
+    if (!window.location.pathname.includes('/login')) {
+        window.location.href = "/login";
+    }
+    return Promise.reject(refreshError);
+}
         }
         return Promise.reject(error);
     }
