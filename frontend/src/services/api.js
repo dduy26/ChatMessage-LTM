@@ -44,19 +44,22 @@ api.interceptors.response.use(
                 const { accessToken } = res.data;
                 memoryToken = accessToken; 
 
-            
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
-    console.error("Phiên đăng nhập hết hạn hoàn toàn.");
-    memoryToken = null;
-    localStorage.removeItem("user");
-    // Điều hướng về login nếu đang không ở trang login
-    if (!window.location.pathname.includes('/login')) {
-        window.location.href = "/login";
-    }
-    return Promise.reject(refreshError);
-}
+                console.error("Phiên đăng nhập hết hạn hoàn toàn.");
+                
+                // Hiển thị thông báo cho người dùng
+                if (!window.location.pathname.includes('/login')) {
+                    alert("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại!");
+                    
+                    memoryToken = null;
+                    localStorage.removeItem("user");
+                    window.location.href = "/login";
+                }
+                
+                return Promise.reject(refreshError);
+            }
         }
         return Promise.reject(error);
     }
