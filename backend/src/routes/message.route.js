@@ -1,7 +1,15 @@
 const router = require("express").Router();
 const MessageController = require("../controllers/message.controller");
+const authMiddleware = require("../middlewares/auth.middleware");
 
-// 1. Tạo tin nhắn mới (Cần có :conversationId trên URL)
+// --- QUAN TRỌNG: BẮT BUỘC PHẢI CÓ MIDDLEWARE ---
+// Để đảm bảo người gửi tin nhắn đã đăng nhập
+router.use(authMiddleware);
+
+// --- CÁC ROUTE ---
+
+// 1. Tạo tin nhắn mới
+// Bạn có thể giữ :conversationId trên URL nếu Controller của bạn đang lấy req.params.conversationId
 // URL: POST /api/messages/:conversationId
 router.post("/:conversationId", MessageController.create);
 
@@ -9,14 +17,13 @@ router.post("/:conversationId", MessageController.create);
 // URL: GET /api/messages/conversation/:conversationId
 router.get("/conversation/:conversationId", MessageController.getByConversation);
 
-
-// Lấy chi tiết một tin nhắn
+// 3. Lấy chi tiết một tin nhắn (nếu cần)
 router.get("/:messageId", MessageController.getById);
 
-// Cập nhật nội dung tin nhắn
+// 4. Cập nhật nội dung tin nhắn (VD: thu hồi, chỉnh sửa)
 router.put("/:messageId", MessageController.update);
 
-// Xóa tin nhắn
+// 5. Xóa tin nhắn
 router.delete("/:messageId", MessageController.remove);
 
 module.exports = router;

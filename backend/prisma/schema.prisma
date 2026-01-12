@@ -61,7 +61,9 @@ model Conversation {
   type      ConversationType @default(DIRECT)
   title     String?
   createdAt DateTime @default(now()) 
+  updatedAt DateTime @updatedAt
 
+  isGroup   Boolean  @default(false)
   messages  Message[]
   tasks     Task[]
   participants Participant[]

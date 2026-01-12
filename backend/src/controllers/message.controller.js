@@ -4,14 +4,36 @@ class MessageController {
     static async create(req, res) {
         try {
             const conversationId = Number(req.params.conversationId);
-            const { content, senderId } = req.body;
+            const { content } = req.body;
+
+
+            let senderId = req.user ? req.user.userId : req.body.senderId;
+
+
+            senderId = Number(senderId);
+
+            if (!senderId || isNaN(senderId)) {
+                return res.status(400).json({ 
+                    error: "Thiếu ID người gửi (senderId). Vui lòng đăng nhập hoặc gửi kèm senderId trong body." 
+                });
+            }
+
             const msg = await MessageService.create({
                 content,
-                senderId: Number(senderId),
+                senderId: senderId, // Dùng biến senderId đã kiểm tra kỹ ở trên
                 conversationId,
             });
+
+            const io = req.app.get("io"); 
+            
+            if (io) {
+                io.emit("new message", msg);
+                console.log(`⚡ Socket sent: [User ${senderId}] nhắn: "${content}"`);
+            }
+
             res.status(201).json(msg);
         } catch (err) {
+            console.error("Lỗi Controller create:", err);
             res.status(400).json({ error: err.message });
         }
     }
@@ -58,5 +80,4 @@ class MessageController {
     }
 }
 
-    
 module.exports = MessageController;

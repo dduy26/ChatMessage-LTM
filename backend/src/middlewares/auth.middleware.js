@@ -25,7 +25,7 @@ const authMiddleware = async (req, res, next) => {
         
         // Đảm bảo decoded có userId
         if (!decoded || (!decoded.userId && !decoded.id)) {
-            console.error("❌ Token không chứa userId hoặc id:", decoded);
+            console.error(" Token không chứa userId hoặc id:", decoded);
             return res.status(401).json({ error: "Token không hợp lệ: thiếu thông tin người dùng" });
         }
 
@@ -47,6 +47,7 @@ const authMiddleware = async (req, res, next) => {
         
         next();
     } catch (error) {
+        console.error("Lỗi trong authMiddleware:", error);
         return res.status(403).json({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn!" });
     }
 };

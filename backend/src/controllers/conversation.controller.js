@@ -1,53 +1,75 @@
 const ConversationService = require("../services/conversation.service");
 
 class ConversationController {
-    // CREATE
-    static async create(req,res) {
+
+    // 1. TẠO HỘI THOẠI (Sửa để tự lấy ID người tạo từ Token)
+    static async create(req, res) {
         try {
-            const convo = await ConversationService.create(req.body);
+            // Lấy ID mình từ Token (người gửi yêu cầu)
+            const senderId = req.user.userId;
+            // Lấy ID người muốn chat cùng từ Body
+            const { userId } = req.body; 
+
+            if (!userId) {
+                return res.status(400).json({ error: "Thiếu userId người nhận (người muốn chat cùng)" });
+            }
+
+            // Gọi Service chuẩn (Logic check trùng hoặc tạo mới)
+            const convo = await ConversationService.create(senderId, Number(userId));
+            
             res.status(201).json(convo);
-        } catch(err) {
-            res.status(400).json({error: err.message});
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ error: err.message });
         }
     }
 
-    // READ: ALL 
-    static async getAll(req,res) {
+    // 2. LẤY DANH SÁCH CHAT CỦA MÌNH (Không lấy hết database nữa!)
+    static async getAll(req, res) {
         try {
-            const convos = await ConversationService.getAll();
+            // Chỉ lấy những hội thoại mà User này có tham gia
+            const userId = req.user.userId;
+            const convos = await ConversationService.getByUserId(userId);
             res.json(convos);
-        } catch(err) {
-            res.status(500).json({error: err.message});
+        } catch (err) {
+            res.status(500).json({ error: err.message });
         }
     } 
-    //READ: Id 
-    static async getById(req,res) {
+
+    // 3. LẤY CHI TIẾT 1 HỘI THOẠI
+    static async getById(req, res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.getById(id);
-            if (!convo) return res.status(404).json({ error: "Không tìm thấy!" });
-        }catch(err) {
+            
+            if (!convo) return res.status(404).json({ error: "Không tìm thấy hội thoại!" });
+            
+            // SỬA LỖI: Thêm dòng này để trả dữ liệu về
+            res.json(convo); 
+        } catch (err) {
             res.status(400).json({ error: err.message });
         }
     }
-    // UPDATE 
-    static async update(req,res) {
+
+    // 4. CẬP NHẬT (Ví dụ đổi tên nhóm chat)
+    static async update(req, res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.update(id, req.body);
             res.json(convo);
-        } catch(err) {
+        } catch (err) {
             res.status(400).json({ error: err.message });
         }
     }
-    // DELETE 
-    static async remove(req,res) {
+
+    // 5. XÓA HỘI THOẠI
+    static async remove(req, res) {
         try {
             const id = Number(req.params.id);
-            const convo = await ConversationService.delete(id);
-            res.json({ message: "Đã xóa!", convo });
-        } catch(err) {
-            res.status(400).json({error: err.message});
+            await ConversationService.delete(id);
+            res.json({ message: "Đã xóa hội thoại!" });
+        } catch (err) {
+            res.status(400).json({ error: err.message });
         }
     }
 }
