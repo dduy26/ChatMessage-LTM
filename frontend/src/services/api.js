@@ -1,24 +1,32 @@
 import axios from 'axios';
 
-// Tạo một instance của Axios để dùng chung cho cả web
 const api = axios.create({
-    baseURL: 'http://localhost:3000/api', // Link tới Backend (nhớ check port 3000 hay khác)
+    baseURL: 'http://localhost:5000/api', 
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Cấu hình tự động gắn Token vào mỗi lần gọi API
-// (Giúp bạn không phải viết đi viết lại đoạn Header Authorization)
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token'); // Lấy token từ bộ nhớ trình duyệt
+        const token = localStorage.getItem('accessToken'); 
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`; // Gắn vào Header
+            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
-    (error) => {
+    (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+    (response) => response, 
+    async (error) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            console.log("Token hết hạn!");
+            
+        }
         return Promise.reject(error);
     }
 );
