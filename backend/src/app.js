@@ -1,16 +1,26 @@
 const express = require('express');
 const cors = require('cors');
 const socket = require('socket.io')
+const cookieParser = require('cookie-parser');
+const path = require('path');
 require("dotenv").config();
+const fs = require('fs');
+const uploadDir = path.join(__dirname, '../../uploads');
+const absoluteUploadPath = path.resolve(__dirname, '..', '..', 'uploads');
 
 const app = express();
 
 // 1. Middlewares
 app.use(cors({
     origin: 'http://localhost:5173',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json()); 
+
+app.use(express.json());
+app.use(cookieParser());
+
 
 // 2. Routes 
 app.use('/api/health', require('./routes/health.route'));
@@ -32,6 +42,7 @@ app.use("/api/tags", require("./routes/tag.route"));
 app.use("/api/friendships", require("./routes/friendship.route"));
 app.use("/api/pinned", require("./routes/pinned.route"));
 
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.get("/health", (req, res) => {
     res.json({ status: "OK", message: "Server is running" });
