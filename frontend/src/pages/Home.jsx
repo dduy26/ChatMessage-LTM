@@ -55,7 +55,8 @@ const Home = () => {
       });
       setMessages([...messages, res.data]);
       setNewMessage("");
-    } catch (err) { alert("Lỗi gửi tin!"); }
+    } catch (err) {console.error(err);
+      alert("Lỗi gửi tin!"); }
   };
 
   // 5. Đăng xuất
