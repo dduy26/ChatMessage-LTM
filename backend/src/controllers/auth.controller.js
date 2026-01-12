@@ -2,6 +2,7 @@ const AuthService = require("../services/auth.service");
 const prisma = require("../config/prisma");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 class AuthController {
     static async requestOTP(req, res) {
@@ -133,13 +134,13 @@ class AuthController {
             const accessToken = jwt.sign(
                 { userId, email: user.email, role: user.role },
                 process.env.JWT_SECRET,
-                { expiresIn: '15m' } 
+                { expiresIn: '10s' } 
             );
 
             const refreshToken = jwt.sign(
                 { userId },
                 process.env.REFRESH_TOKEN_SECRET || 'refresh_secret_key',
-                { expiresIn: '7d' } 
+                { expiresIn: '1m' } 
             );
 
             // HTTPONLY COOKIE
@@ -245,7 +246,7 @@ class AuthController {
             const decoded = jwt.decode(token);
             
             return res.status(200).json({
-                token: token.substring(0, 20) + "...", // Chỉ hiển thị 20 ký tự đầu
+                token: token.substring(0, 20) + "...", 
                 tokenLength: token.length,
                 decoded: decoded,
                 userId: decoded?.userId,
@@ -263,7 +264,6 @@ class AuthController {
             const decoded = jwt.decode(token);
             const expiresAt = new Date(decoded.exp * 1000);
 
-            // Chỉ cần lưu vào Blacklist
             await prisma.blackListedToken.upsert({
                 where: { token: token },
                 update: {}, 
@@ -275,6 +275,78 @@ class AuthController {
             return res.status(200).json({ message: "Đăng xuất thành công!" });
         } catch (error) {
             return res.status(500).json({ message: "Có lỗi xảy ra khi đăng xuất" });
+        }
+    }   
+
+    static async requestVerification(req, res) {
+        try {
+            const userId = req.user.userId;
+
+            const user = await prisma.user.findUnique({ where: { id: userId } });
+            if (!user) return res.status(404).json({ error: "Người dùng không tồn tại" });
+
+            // Tạo token xác minh (hết hạn trong 15 phút)
+            const verifyToken = jwt.sign(
+                { email: user.email }, 
+                process.env.JWT_SECRET, 
+                { expiresIn: '15m' }
+            );
+
+            const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER, 
+                    pass: process.env.EMAIL_PASS  
+                }
+            });
+
+            // Link dẫn tới hàm verifyEmail bên dưới
+            const url = `http://localhost:5000/api/auth/verify-email?token=${verifyToken}`;
+
+            await transporter.sendMail({
+                to: user.email,
+                subject: "Xác minh tài khoản của bạn",
+                html: `
+                    <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px;">
+                        <h2>Xác minh Email của bạn</h2>
+                        <p>Chào ${user.fullName || user.username},</p>
+                        <p>Vui lòng nhấn vào nút bên dưới để xác minh tài khoản và nhận Tích Xanh:</p>
+                        <a href="${url}" style="background: #7360f2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">XÁC MINH NGAY</a>
+                        <p>Link này sẽ hết hạn sau 15 phút.</p>
+                    </div>
+                `
+            });
+
+            return res.status(200).json({ message: "Link xác minh đã được gửi vào Email của bạn!" });
+        } catch (error) {
+            console.error("Lỗi gửi mail:", error);
+            return res.status(500).json({ error: "Không thể gửi email: " + error.message });
+        }
+    }
+
+    static async verifyEmail(req, res) {
+        try {
+            const { token } = req.query;
+            if (!token) return res.status(400).send("Thiếu mã token xác minh.");
+
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const userEmail = decoded.email;
+            await prisma.user.update({
+                where: { email: userEmail },
+                data: { isVerified: true }
+            });
+
+            // Giao diện thông báo thành công cho người dùng trên trình duyệt
+            return res.send(`
+                <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+                    <h1 style="color: #22c55e;">Xác minh thành công! ✅</h1>
+                    <p>Tài khoản của bạn đã được cấp tích xanh.</p>
+                    <p>Bạn có thể quay lại ứng dụng và tải lại trang hồ sơ.</p>
+                </div>
+            `);
+        } catch (error) {
+            console.error("Lỗi verify email:", error);
+            return res.status(400).send("<h1>Xác minh thất bại</h1><p>Link đã hết hạn hoặc không hợp lệ.</p>");
         }
     }
 }

@@ -86,42 +86,51 @@ class UserController {
     static async updateProfile(req, res) {
         try {
             const userId = parseInt(req.user.userId, 10); 
-            const { fullName, phoneNumber, avatar } = req.body;
+            const { fullName, phoneNumber, bio, status } = req.body; 
 
             const updatedUser = await prisma.user.update({
                 where: { id: userId },
-                data: { fullName, phoneNumber, avatar }
+                data: { 
+                    fullName, 
+                    phoneNumber, 
+                    bio
+                }
             });
 
             const { password, ...safeData } = updatedUser;
-            res.status(200).json({ message: "Cập nhật thành công", user: safeData });
+            res.status(200).json({ 
+                message: "Cập nhật hồ sơ thành công", 
+                user: safeData 
+            });
         } catch (error) {
+            console.error("Lỗi updateProfile:", error);
             res.status(400).json({ error: "Lỗi cập nhật: " + error.message });
         }
     }
 
     static async updateAvatar(req, res) {
-    try {
-        const userId = req.user.userId; 
-        if (!req.file) return res.status(400).json({ error: "Vui lòng chọn ảnh" });
+        try {
+            const userId = req.user.userId; 
+            if (!req.file) return res.status(400).json({ error: "Vui lòng chọn ảnh" });
 
-        const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-        const updatedUser = await prisma.user.update({
-            where: { id: Number(userId) },
-            data: { avatar: avatarUrl }
-        });
+            const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+            const updatedUser = await prisma.user.update({
+                where: { id: Number(userId) },
+                data: { avatar: avatarUrl }
+            });
 
-        const { password, ...safeData } = updatedUser;
+            const { password, ...safeData } = updatedUser;
 
-        res.status(200).json({ 
-            message: "Cập nhật ảnh đại diện thành công", 
-            avatar: avatarUrl, 
-        });
-    } catch (error) {
-        console.error("Lỗi upload:", error);
-        res.status(500).json({ error: error.message });
+            res.status(200).json({ 
+                message: "Cập nhật ảnh đại diện thành công", 
+                avatar: avatarUrl,
+                user: safeData 
+            });
+        } catch (error) {
+            console.error("Lỗi upload avatar:", error);
+            res.status(500).json({ error: "Lỗi hệ thống: " + error.message });
+        }
     }
-}
 }
 
 module.exports = UserController;

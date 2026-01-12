@@ -7,6 +7,8 @@ const UserController = require('../controllers/user.controller');
 // Route yêu cầu gửi mã OTP về Email
 router.post('/request-otp', AuthController.requestOTP);
 router.post('/verify-otp', AuthController.verifyOTP);
+router.post("/request-verification", authMiddleware, AuthController.requestVerification);
+router.get("/verify-email", AuthController.verifyEmail);
 
 router.post('/register', AuthController.register);
 router.get('/profile', authMiddleware, UserController.getProfile);
