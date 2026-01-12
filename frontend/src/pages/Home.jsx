@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { io } from "socket.io-client"; // Cần cài thư viện này
 // Dùng bộ icon Lucide cho hiện đại (Viber style)
 import { 
   MessageCircle, Phone, Settings, LogOut, Search, 
@@ -14,11 +15,29 @@ const Home = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef();
+  const socket = useRef(); // Sử dụng ref để giữ kết nối socket
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // 1. Lấy danh sách chat
+  // 1. Kết nối Socket và lấy danh sách chat
   useEffect(() => {
+    // Khởi tạo socket
+    socket.current = io("http://localhost:5000", {
+      query: { token: localStorage.getItem("accessToken") }
+    });
+
+    // Lắng nghe thay đổi trạng thái từ server
+    socket.current.on("user_status_change", (data) => {
+      setConversations((prev) =>
+        prev.map((conv) => {
+          if (conv.participantId === data.userId) {
+            return { ...conv, isOnline: data.isOnline };
+          }
+          return conv;
+        })
+      );
+    });
+
     const fetchConversations = async () => {
       try {
         const res = await api.get("/conversations");
@@ -26,6 +45,8 @@ const Home = () => {
       } catch (err) { console.error(err); }
     };
     fetchConversations();
+
+    return () => socket.current.disconnect();
   }, []);
 
   // 2. Lấy tin nhắn
@@ -55,7 +76,7 @@ const Home = () => {
       });
       setMessages([...messages, res.data]);
       setNewMessage("");
-    } catch  { 
+    } catch { 
       alert("Lỗi gửi tin!"); 
     }
   };
@@ -64,22 +85,14 @@ const Home = () => {
   const handleLogout = async () => {
     try {
         const res = await api.post("/auth/logout");
-    
-        if (res.data.success) {
-            alert(res.data.message); 
-        }
+        if (res.data.success) { alert(res.data.message); }
     } catch (err) {
         console.error("Lỗi đăng xuất:", err);
-        alert("Phiên đăng nhập đã kết thúc.");
     } finally {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
-        
-        // Chuyển hướng về trang login
+        localStorage.clear();
         navigate("/login");
     }
-};
+  };
 
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
 
@@ -98,13 +111,18 @@ const Home = () => {
         <div className="sidebar-icon" onClick={handleLogout} title="Đăng xuất">
             <LogOut size={24} />
         </div>
-        <img 
-          src={getAvatar(user.fullName, user.avatar)} 
-          className="avatar-circle" 
-          style={{ marginBottom: 20, cursor: "pointer" }}
-          alt="Me" 
-          onClick={() => navigate("/profile")} 
-        />
+        
+        {/* Avatar của Tôi có chấm xanh mặc định vì đang online */}
+        <div style={{ position: 'relative', marginBottom: 20 }}>
+            <img 
+              src={getAvatar(user.fullName, user.avatar)} 
+              className="avatar-circle" 
+              style={{ cursor: "pointer" }}
+              alt="Me" 
+              onClick={() => navigate("/profile")} 
+            />
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderRadius: '50%', background: '#22c55e', border: '2px solid #7360f2' }}></div>
+        </div>
       </div>
 
       {/* --- CỘT 2: DANH SÁCH CHAT --- */}
@@ -123,10 +141,18 @@ const Home = () => {
               className={`conv-item ${currentChat?.id === conv.id ? 'active' : ''}`}
               onClick={() => setCurrentChat(conv)}
             >
-              <img src={getAvatar(conv.title, conv.avatar)} style={{width:48, height:48, borderRadius:'50%'}} alt="" />
+              <div style={{ position: 'relative' }}>
+                <img src={getAvatar(conv.title, conv.avatar)} style={{width:48, height:48, borderRadius:'50%'}} alt="" />
+                {/* Chấm trạng thái trong danh sách hội thoại */}
+                <div style={{ 
+                  position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
+                  background: conv.isOnline ? '#22c55e' : '#94a3b8', 
+                  border: '2px solid white' 
+                }}></div>
+              </div>
               <div className="conv-info">
                  <h4>{conv.title || "User"}</h4>
-                 <p>Tin nhắn mới nhất...</p>
+                 <p>{conv.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}</p>
               </div>
             </div>
           ))}
@@ -139,10 +165,15 @@ const Home = () => {
           <>
             <div className="chat-header">
                <div style={{display:'flex', gap:12, alignItems:'center'}}>
-                  <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:40, height:40, borderRadius:'50%'}} alt="" />
+                  <div style={{ position: 'relative' }}>
+                    <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:40, height:40, borderRadius:'50%'}} alt="" />
+                    <div style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: currentChat.isOnline ? '#22c55e' : '#94a3b8', border: '2px solid white' }}></div>
+                  </div>
                   <div>
                     <h3 style={{fontSize:16, fontWeight:'bold'}}>{currentChat.title}</h3>
-                    <span style={{fontSize:12, color:'#22c55e'}}>● Online</span>
+                    <span style={{fontSize:12, color: currentChat.isOnline ? '#22c55e' : '#888'}}>
+                        ● {currentChat.isOnline ? "Online" : "Offline"}
+                    </span>
                   </div>
                </div>
                <div style={{display:'flex', gap:20, color:'#7360f2'}}>
@@ -156,7 +187,11 @@ const Home = () => {
                 const isMe = msg.senderId === user.id;
                 return (
                   <div key={idx} className={`msg-row ${isMe ? 'me' : 'other'}`}>
-                    {!isMe && <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:30, height:30, borderRadius:'50%'}} alt="" />}
+                    {!isMe && (
+                        <div style={{ position: 'relative', alignSelf: 'flex-end' }}>
+                             <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:30, height:30, borderRadius:'50%'}} alt="" />
+                        </div>
+                    )}
                     <div className="msg-bubble">
                       {msg.content}
                     </div>
@@ -187,8 +222,9 @@ const Home = () => {
             </div>
           </>
         ) : (
-          <div style={{flex:1, display:'flex', justifyContent:'center', alignItems:'center', color:'#888'}}>
-             <p>Chọn một cuộc trò chuyện để bắt đầu</p>
+          <div className="empty-chat" style={{flex:1, display:'flex', flexDirection: 'column', justifyContent:'center', alignItems:'center', color:'#888'}}>
+              <MessageCircle size={64} style={{ marginBottom: 10, opacity: 0.2 }} />
+              <p>Chọn một cuộc trò chuyện để bắt đầu</p>
           </div>
         )}
       </div>
