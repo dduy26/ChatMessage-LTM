@@ -1,4 +1,5 @@
 const UserService = require("../services/user.service");
+const prisma = require("../config/prisma");
 
 class UserController {
     // CREATE
@@ -55,27 +56,19 @@ class UserController {
 
     static async getProfile(req, res) {
         try {
-            // 1. Kiểm tra dữ liệu từ Middleware 
             if (!req.user) {
                 return res.status(401).json({ error: "Bạn chưa đăng nhập hoặc phiên làm việc hết hạn" });
             }
-
-            // 2. Lấy ĐÚNG trường 'userId' từ Token
             const rawId = req.user.userId; 
-
-            // 3. Ép kiểu về số nguyên để đảm bảo khớp với kiểu Int trong Schema
             const numericUserId = parseInt(rawId, 10);
 
-            // 4. Kiểm tra NaN ngay tại Controller để tránh truyền lỗi xuống Service
             if (isNaN(numericUserId)) {
                 console.error("Lỗi: Không tìm thấy userId hợp lệ trong req.user:", req.user);
                 return res.status(400).json({ error: "ID người dùng không hợp lệ (NaN)" });
             }
 
-            // 5. Gọi Service tìm kiếm người dùng
             const user = await UserService.getById(numericUserId);
 
-            // 6. Kiểm tra nếu không tìm thấy người dùng trong DB
             if (!user) {
                 return res.status(404).json({ error: "Tài khoản không tồn tại trên hệ thống" });
             }
@@ -92,7 +85,6 @@ class UserController {
 
     static async updateProfile(req, res) {
         try {
-            // Lấy userId từ authMiddleware đã decode
             const userId = parseInt(req.user.userId, 10); 
             const { fullName, phoneNumber, avatar } = req.body;
 
@@ -109,26 +101,27 @@ class UserController {
     }
 
     static async updateAvatar(req, res) {
-        try {
-            const userId = req.user.userId; // Lấy từ middleware auth
-            if (!req.file) return res.status(400).json({ error: "Vui lòng chọn ảnh" });
+    try {
+        const userId = req.user.userId; 
+        if (!req.file) return res.status(400).json({ error: "Vui lòng chọn ảnh" });
 
-            const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+        const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+        const updatedUser = await prisma.user.update({
+            where: { id: Number(userId) },
+            data: { avatar: avatarUrl }
+        });
 
-            const updatedUser = await prisma.user.update({
-                where: { id: Number(userId) },
-                data: { avatar: avatarPath }
-            });
+        const { password, ...safeData } = updatedUser;
 
-            res.status(200).json({ 
-                message: "Cập nhật ảnh đại diện thành công", 
-                avatar: avatarPath,
-                user: updatedUser 
-            });
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        res.status(200).json({ 
+            message: "Cập nhật ảnh đại diện thành công", 
+            avatar: avatarUrl, 
+        });
+    } catch (error) {
+        console.error("Lỗi upload:", error);
+        res.status(500).json({ error: error.message });
     }
+}
 }
 
 module.exports = UserController;
