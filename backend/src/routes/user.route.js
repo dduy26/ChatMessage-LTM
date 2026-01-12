@@ -10,8 +10,8 @@ router.get("/:id", UserController.getAllById);
 router.put("/:id", UserController.update);
 router.delete("/:id", UserController.remove);
 
-router.get("/profile", authMiddleware, UserController.getProfile);
 router.get("/", authMiddleware, authorize("ADMIN"), UserController.getAll);
 router.delete("/:id", authMiddleware, authorize("ADMIN"), UserController.remove);
+
 
 module.exports = router;

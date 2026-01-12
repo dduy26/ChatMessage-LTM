@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const prisma = require('./src/config/prisma');
 const jwt = require('jsonwebtoken');
 
+
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);

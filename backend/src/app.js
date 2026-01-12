@@ -1,16 +1,24 @@
 const express = require('express');
 const cors = require('cors');
 const socket = require('socket.io')
+const cookieParser = require('cookie-parser');
 require("dotenv").config();
+
+
 
 const app = express();
 
 // 1. Middlewares
 app.use(cors({
     origin: 'http://localhost:5173',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json()); 
+
+app.use(express.json());
+app.use(cookieParser());
+
 
 // 2. Routes 
 app.use('/api/health', require('./routes/health.route'));
