@@ -1,0 +1,44 @@
+services:
+  # 1. Container cho Database
+  db:
+    image: postgres:15-alpine
+    container_name: chat-app-db
+    restart: always
+    environment:
+      POSTGRES_USER: chatapp_db
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: chatapp_db  # Tên DB gốc
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Container cho Backend
+  backend:
+    build: ./backend
+    container_name: chat-app-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      # Đã sửa: dùng chatapp_db thay vì chat_db để khớp với dịch vụ db ở trên
+      DATABASE_URL: "postgresql://chatapp_db:1234@db:5432/chatapp_db?schema=public"
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASS: ${EMAIL_PASS}
+    depends_on:
+      - db
+
+  # 3. Container cho Frontend
+  frontend:
+    build: ./frontend
+    container_name: chat-app-frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

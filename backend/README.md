@@ -36,3 +36,6 @@ ALTER ROLE chatapp CREATEDB;
 
 npm install dotenv
 npm install socket.io
+
+docker-compose up --build
+docker-compose up

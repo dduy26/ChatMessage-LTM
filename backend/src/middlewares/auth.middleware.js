@@ -25,7 +25,7 @@ const authMiddleware = async (req, res, next) => {
         
         // Đảm bảo decoded có userId
         if (!decoded || (!decoded.userId && !decoded.id)) {
-            console.error("❌ Token không chứa userId hoặc id:", decoded);
+            console.error("Token không chứa userId hoặc id:", decoded);
             return res.status(401).json({ error: "Token không hợp lệ: thiếu thông tin người dùng" });
         }
 
