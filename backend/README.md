@@ -37,5 +37,7 @@ ALTER ROLE chatapp CREATEDB;
 npm install dotenv
 npm install socket.io
 
+docker-compose down
 docker-compose up --build
 docker-compose up
+docker-compose exec backend npx prisma db push
