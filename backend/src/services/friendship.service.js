@@ -1,34 +1,61 @@
 const prisma = require("../config/prisma");
 
 class FriendshipService {
-    // gửi lời mời kết bạn
-    static async sendFriendRequest(senderId, receiverId){
-        if (senderId === receiverId){
-            throw new Error(" không thể gửi lời mời kết bạn cho bản thân");
+    // 1. GỬI LỜI MỜI QUA EMAIL 
+    static async sendRequestByEmail(senderId, email) {
+        // Tìm User có email đó trước
+        const receiver = await prisma.user.findUnique({ where: { email } });
+        
+        if (!receiver) {
+            throw new Error("Không tìm thấy người dùng với email này!");
         }
+
+        if (senderId === receiver.id) {
+            throw new Error("Bạn không thể gửi lời mời kết bạn cho bản thân");
+        }
+
+        // Kiểm tra xem đã có bản ghi nào giữa 2 người chưa
         const existing = await prisma.friendship.findFirst({
-        where: {
+            where: {
                 OR: [
-                    { requesterId: senderId, addresseeId: receiverId }, // Chiều đi
-                    { requesterId: receiverId, addresseeId: senderId }  // Chiều về
+                    { requesterId: senderId, addresseeId: receiver.id },
+                    { requesterId: receiver.id, addresseeId: senderId }
                 ]
             }
         });
+
         if (existing) {
-            throw new Error("Lời mời kết bạn đã tồn tại hoặc hai người đã là bạn bè");
+            throw new Error("Lời mời đã tồn tại hoặc hai người đã là bạn bè");
         }
+
         return prisma.friendship.create({
-        data: {
-            requesterId: senderId, // người gửi
-            addresseeId: receiverId, // người nhận
-            status: "PENDING", // trạng thái chờ xác nhận
-        }
-    });
+            data: {
+                requesterId: senderId,
+                addresseeId: receiver.id,
+                status: "PENDING",
+            }
+        });
     }
+
+    // 2. LẤY DANH SÁCH LỜI MỜI ĐANG CHỜ
+    static async getPendingRequests(userId) {
+        return prisma.friendship.findMany({
+            where: {
+                addresseeId: userId, // Tôi là người nhận
+                status: "PENDING"
+            },
+            include: {
+                requester: { 
+                    select: { id: true, fullName: true, email: true, avatar: true }
+                }
+            }
+        });
+    }
+
     static async acceptRequest(friendshipId){
         return prisma.friendship.update({
-            where: { id: friendshipId }, // tìm lời mời kết bạn theo ID
-            data: { status: "ACCEPTED" }, // cập nhật trạng thái thành bạn bè
+            where: { id: friendshipId }, 
+            data: { status: "ACCEPTED" }, 
         });
 
     }

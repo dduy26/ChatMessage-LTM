@@ -1,5 +1,6 @@
 const AuthService = require("../services/auth.service");
 const prisma = require("../config/prisma");
+const { Prisma } = require("@prisma/client");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -56,15 +57,24 @@ class AuthController {
 
             // 1. Kiểm tra đầu vào
             if (!email || !password || !username) {
-                return res.status(400).json({ error: "Email, password và username là bắt buộc" });
+                return res.status(400).json({ 
+                    message: "Email, mật khẩu và tên đăng nhập là bắt buộc" 
+                });
             }
 
-            // 2. Kiểm tra email/username đã tồn tại chưa
+            // 2. Kiểm tra email/username/phoneNumber đã tồn tại chưa
             const existingUser = await prisma.user.findFirst({
-                where: { OR: [{ email }, { username }] }
+                where: { OR: [{ email }, { username }, { phoneNumber }] }
             });
             if (existingUser) {
-                return res.status(400).json({ error: "Email hoặc Username đã được sử dụng" });
+                let conflictField = "thông tin tài khoản";
+                if (existingUser.email === email) conflictField = "Email";
+                else if (existingUser.username === username) conflictField = "Tên đăng nhập";
+                else if (existingUser.phoneNumber === phoneNumber) conflictField = "Số điện thoại";
+
+                return res.status(400).json({ 
+                    message: `${conflictField} đã được sử dụng. Vui lòng chọn ${conflictField.toLowerCase()} khác.` 
+                });
             }
 
             // 3. Mã hóa mật khẩu
@@ -102,7 +112,9 @@ class AuthController {
 
             // 5. Tạo Token JWT (Để FE lưu lại và dùng cho Middleware)
             const token = jwt.sign(
-                { userId: newUser.id, email: newUser.email, role: newUser.role },
+                {   userId: newUser.id.toString(), 
+                    email: newUser.email, 
+                    role: newUser.role },
                 process.env.JWT_SECRET,
                 { expiresIn: '7d' } // Token hết hạn sau 7 ngày
             );
@@ -114,7 +126,25 @@ class AuthController {
             });
 
         } catch (error) {
-            return res.status(500).json({ error: "Lỗi đăng ký: " + error.message });
+            // Bắt lỗi unique constraint của Prisma (phòng khi vẫn lọt qua bước check ở trên)
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                const targets = error.meta?.target || [];
+                const field = Array.isArray(targets) ? targets[0] : targets;
+
+                let fieldLabel = "Thông tin";
+                if (field === "email") fieldLabel = "Email";
+                else if (field === "username") fieldLabel = "Tên đăng nhập";
+                else if (field === "phoneNumber") fieldLabel = "Số điện thoại";
+
+                return res.status(400).json({
+                    message: `${fieldLabel} đã tồn tại. Vui lòng sử dụng ${fieldLabel.toLowerCase()} khác.`
+                });
+            }
+
+            console.error("Lỗi đăng ký:", error);
+            return res.status(500).json({ 
+                message: "Lỗi đăng ký: " + error.message 
+            });
         }
     }
 
