@@ -7,4 +7,7 @@ COPY . .
 # Sau khi cài openssl, lệnh này mới tạo ra Client chạy được trên Alpine
 RUN npx prisma generate
 EXPOSE 5000
-CMD ["npm", "start"]
+# Copy và set quyền cho start script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+CMD ["/app/start.sh"]
