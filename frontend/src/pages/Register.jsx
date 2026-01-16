@@ -43,7 +43,11 @@ const Register = () => {
       navigate("/login"); 
     } catch (err) {
       // Xử lý lỗi từ Server 
-      setError(err.response?.data?.message || "Đăng ký thất bại");
+      const serverMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Đăng ký thất bại";
+      setError(serverMsg);
     } finally {
       setLoading(false);
     }

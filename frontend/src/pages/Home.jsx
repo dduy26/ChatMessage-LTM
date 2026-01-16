@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
-import { io } from "socket.io-client"; // Cần cài thư viện này
-// Dùng bộ icon Lucide cho hiện đại (Viber style)
+import { io } from "socket.io-client";
 import { 
   MessageCircle, Phone, Settings, LogOut, Search, 
-  Send, Image, Paperclip, MoreVertical, Plus 
+  Send, Image, Paperclip, MoreVertical, Plus, Users, X, UserPlus, Check
 } from "lucide-react";
+import Friend from "./Friend";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -15,18 +15,21 @@ const Home = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef();
-  const socket = useRef(); // Sử dụng ref để giữ kết nối socket
+  const socket = useRef();
+
+  // --- STATE MỚI CHO PHẦN BẠN BÈ ---
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' hoặc 'friends'
+  const [emailSearch, setEmailSearch] = useState("");
+  const [pendingRequests, setPendingRequests] = useState([]);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // 1. Kết nối Socket và lấy danh sách chat
+  // 1. Kết nối Socket và lấy danh sách chat (Giữ nguyên của bạn)
   useEffect(() => {
-    // Khởi tạo socket
     socket.current = io("http://localhost:5000", {
       query: { token: localStorage.getItem("accessToken") }
     });
 
-    // Lắng nghe thay đổi trạng thái từ server
     socket.current.on("user_status_change", (data) => {
       setConversations((prev) =>
         prev.map((conv) => {
@@ -46,10 +49,21 @@ const Home = () => {
     };
     fetchConversations();
 
+    // Lấy lời mời kết bạn khi vào trang
+    fetchPendingRequests();
+
     return () => socket.current.disconnect();
   }, []);
 
-  // 2. Lấy tin nhắn
+  // Logic lấy lời mời kết bạn (Pending)
+  const fetchPendingRequests = async () => {
+    try {
+      const res = await api.get("/friendship/requests"); // Đảm bảo route này trả về danh sách PENDING
+      setPendingRequests(res.data);
+    } catch (err) { console.error("Lỗi lấy lời mời:", err); }
+  };
+
+  // 2. Lấy tin nhắn (Giữ nguyên)
   useEffect(() => {
     if (!currentChat) return;
     const fetchMessages = async () => {
@@ -61,12 +75,12 @@ const Home = () => {
     fetchMessages();
   }, [currentChat]);
 
-  // 3. Auto scroll
+  // 3. Auto scroll (Giữ nguyên)
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 4. Gửi tin nhắn
+  // 4. Gửi tin nhắn (Giữ nguyên)
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !currentChat) return;
     try {
@@ -76,22 +90,38 @@ const Home = () => {
       });
       setMessages([...messages, res.data]);
       setNewMessage("");
-    } catch { 
-      alert("Lỗi gửi tin!"); 
-    }
+    } catch { alert("Lỗi gửi tin!"); }
   };
 
-  // 5. Đăng xuất
+  // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
     try {
         const res = await api.post("/auth/logout");
         if (res.data.success) { alert(res.data.message); }
-    } catch (err) {
-        console.error("Lỗi đăng xuất:", err);
-    } finally {
+    } catch (err) { console.error("Lỗi đăng xuất:", err); } finally {
         localStorage.clear();
         navigate("/login");
     }
+  };
+
+  // --- LOGIC XỬ LÝ BẠN BÈ ---
+  const handleAddFriend = async () => {
+    if (!emailSearch.trim()) return;
+    try {
+      const res = await api.post('/friendship/send-request', { email: emailSearch });
+      alert(res.data.message || "Đã gửi lời mời!");
+      setEmailSearch("");
+    } catch (err) {
+      alert(err.response?.data?.error || "Không tìm thấy người dùng!");
+    }
+  };
+
+  const handleAcceptFriend = async (requestId) => {
+    try {
+      await api.put(`/friendship/accept/${requestId}`);
+      alert("Đã đồng ý kết bạn!");
+      fetchPendingRequests(); // Load lại danh sách
+    } catch { alert("Lỗi xác nhận"); }
   };
 
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
@@ -103,16 +133,30 @@ const Home = () => {
         <div style={{padding: 10}}><MessageCircle color="white" size={28} /></div>
         
         <div style={{flex:1, display:'flex', flexDirection:'column', gap: 20, alignItems:'center', width:'100%'}}>
-           <div className="sidebar-icon active"><MessageCircle size={24} /></div>
-           <div className="sidebar-icon"><Phone size={24} /></div>
-           <div className="sidebar-icon"><Settings size={24} /></div>
+            {/* Tab Tin nhắn */}
+            <div 
+              className={`sidebar-icon ${activeTab === 'chat' ? 'active' : ''}`}
+              onClick={() => setActiveTab('chat')}
+            >
+              <MessageCircle size={24} />
+            </div>
+
+            {/* Tab Bạn bè (Mới thêm) */}
+            <div 
+              className={`sidebar-icon ${activeTab === 'friends' ? 'active' : ''}`}
+              onClick={() => setActiveTab('friends')}
+            >
+              <Users size={24} />
+            </div>
+
+            <div className="sidebar-icon"><Phone size={24} /></div>
+            <div className="sidebar-icon"><Settings size={24} /></div>
         </div>
 
         <div className="sidebar-icon" onClick={handleLogout} title="Đăng xuất">
             <LogOut size={24} />
         </div>
         
-        {/* Avatar của Tôi có chấm xanh mặc định vì đang online */}
         <div style={{ position: 'relative', marginBottom: 20 }}>
             <img 
               src={getAvatar(user.fullName, user.avatar)} 
@@ -125,41 +169,85 @@ const Home = () => {
         </div>
       </div>
 
-      {/* --- CỘT 2: DANH SÁCH CHAT --- */}
+      {/* --- CỘT 2: DANH SÁCH CHAT / BẠN BÈ --- */}
       <div className="chat-list">
-        <div className="search-bar">
-           <div style={{display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:20, padding:'0 15px'}}>
-              <Search size={16} color="#888" />
-              <input className="search-input" placeholder="Tìm kiếm..." />
-           </div>
-        </div>
-        
-        <div style={{flex:1, overflowY:'auto'}}>
-          {conversations.map(conv => (
-            <div 
-              key={conv.id} 
-              className={`conv-item ${currentChat?.id === conv.id ? 'active' : ''}`}
-              onClick={() => setCurrentChat(conv)}
-            >
-              <div style={{ position: 'relative' }}>
-                <img src={getAvatar(conv.title, conv.avatar)} style={{width:48, height:48, borderRadius:'50%'}} alt="" />
-                {/* Chấm trạng thái trong danh sách hội thoại */}
-                <div style={{ 
-                  position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
-                  background: conv.isOnline ? '#22c55e' : '#94a3b8', 
-                  border: '2px solid white' 
-                }}></div>
-              </div>
-              <div className="conv-info">
-                 <h4>{conv.title || "User"}</h4>
-                 <p>{conv.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}</p>
+        {activeTab === 'chat' ? (
+          <>
+            <div className="search-bar">
+                <div style={{display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:20, padding:'0 15px'}}>
+                  <Search size={16} color="#888" />
+                  <input className="search-input" placeholder="Tìm kiếm cuộc trò chuyện..." />
+                </div>
+            </div>
+            
+            <div style={{flex:1, overflowY:'auto'}}>
+              {conversations.map(conv => (
+                <div 
+                  key={conv.id} 
+                  className={`conv-item ${currentChat?.id === conv.id ? 'active' : ''}`}
+                  onClick={() => setCurrentChat(conv)}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <img src={getAvatar(conv.title, conv.avatar)} style={{width:48, height:48, borderRadius:'50%'}} alt="" />
+                    <div style={{ 
+                      position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
+                      background: conv.isOnline ? '#22c55e' : '#94a3b8', 
+                      border: '2px solid white' 
+                    }}></div>
+                  </div>
+                  <div className="conv-info">
+                      <h4>{conv.title || "User"}</h4>
+                      <p>{conv.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          /* GIAO DIỆN QUẢN LÝ BẠN BÈ TẠI CỘT 2 */
+          <div className="friends-manager" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div className="p-4 border-b border-gray-100">
+              <h3 style={{ fontWeight: 'bold', margin: '10px 15px' }}>Kết bạn mới</h3>
+              <div style={{ display: 'flex', gap: 8, padding: '0 15px' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f3f4f6', borderRadius: 20, padding: '0 15px' }}>
+                  <Search size={14} color="#888" />
+                  <input 
+                    className="search-input" 
+                    placeholder="Nhập email..." 
+                    value={emailSearch}
+                    onChange={(e) => setEmailSearch(e.target.value)}
+                  />
+                </div>
+                <button onClick={handleAddFriend} style={{ background: '#7360f2', color: 'white', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer' }}>
+                  <UserPlus size={18} />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
+              <h4 style={{ fontSize: 12, color: '#aaa', marginBottom: 10 }}>LỜI MỜI KẾT BẠN ({pendingRequests.length})</h4>
+              {pendingRequests.map(req => (
+                <div key={req.id} className="conv-item" style={{ borderRadius: 12, marginBottom: 8, background: '#f9f9f9' }}>
+                   <div className="conv-info">
+                      <h4 style={{ fontSize: 14 }}>{req.sender?.fullName || "Người dùng"}</h4>
+                      <p style={{ fontSize: 11 }}>{req.sender?.email}</p>
+                   </div>
+                   <div style={{ display: 'flex', gap: 5 }}>
+                      <button onClick={() => handleAcceptFriend(req.id)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
+                        <Check size={16} />
+                      </button>
+                      <button style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
+                        <X size={16} />
+                      </button>
+                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* --- CỘT 3: CỬA SỔ CHAT --- */}
+      {/* --- CỘT 3: CỬA SỔ CHAT (Giữ nguyên) --- */}
       <div className="chat-window">
         {currentChat ? (
           <>
@@ -192,9 +280,7 @@ const Home = () => {
                              <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:30, height:30, borderRadius:'50%'}} alt="" />
                         </div>
                     )}
-                    <div className="msg-bubble">
-                      {msg.content}
-                    </div>
+                    <div className="msg-bubble">{msg.content}</div>
                   </div>
                 )
               })}
@@ -216,9 +302,7 @@ const Home = () => {
                      <Paperclip size={20} style={{cursor:'pointer'}} />
                   </div>
                </div>
-               <div onClick={handleSendMessage} className="send-btn">
-                  <Send size={24} />
-               </div>
+               <div onClick={handleSendMessage} className="send-btn"><Send size={24} /></div>
             </div>
           </>
         ) : (
