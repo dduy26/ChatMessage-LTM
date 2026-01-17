@@ -46,9 +46,15 @@ class FriendshipService {
             },
             include: {
                 requester: { 
-                    select: { id: true, fullName: true, email: true, avatar: true }
+                        select: { 
+                            id: true,
+                            //username: true,
+                            fullName: true, 
+                            email: true, 
+                            avatar: true 
+                        }
+                    }
                 }
-            }
         });
     }
 

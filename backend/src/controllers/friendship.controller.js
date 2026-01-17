@@ -1,6 +1,16 @@
 const FriendshipService = require("../services/friendship.service");
 
 class FriendshipController{
+    static async getPendingRequests(req, res) {
+        try {
+            const userId = req.user.id;
+            const requests = await FriendshipService.getPendingRequests(userId);
+            return res.status(200).json(requests);
+        } catch(error) {
+            return res.status(500).json({ error: err.message});
+        }
+    }
+
     //create 
     static async sendRequest(req, res) {
         try {
