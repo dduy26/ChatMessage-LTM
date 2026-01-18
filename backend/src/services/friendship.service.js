@@ -1,6 +1,20 @@
 const prisma = require("../config/prisma");
 
 class FriendshipService {
+    // 0. TÌM KIẾM NGƯỜI DÙNG THEO EMAIL
+    static async searchUserByEmail(email) {
+        const user = await prisma.user.findUnique({
+            where: { email },
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                avatar: true
+            }
+        });
+        return user;
+    }
+
     // 1. GỬI LỜI MỜI QUA EMAIL 
     static async sendRequestByEmail(senderId, email) {
         // Tìm User có email đó trước

@@ -4,6 +4,7 @@ const authMiddleware = require('../middlewares/auth.middleware');
 
 router.use(authMiddleware);
 
+router.get('/search', FriendshipController.searchUserByEmail);
 router.get('/requests', FriendshipController.getPendingRequests);
 router.post('/send-request', FriendshipController.sendRequest);
 router.put('/accept/:id', FriendshipController.acceptRequest);

@@ -10,7 +10,7 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này!" });
         }
 
-        const isBlacklisted = await prisma.blacklistedToken.findUnique({
+        const isBlacklisted = await prisma.blackListedToken.findUnique({
             where: { token: token }
         });
 
@@ -20,6 +20,10 @@ const authMiddleware = async (req, res, next) => {
 
         const decoded = JWT.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
+        // Đảm bảo tương thích với cả req.user.id và req.user.userId
+        if (decoded.userId && !decoded.id) {
+            req.user.id = decoded.userId;
+        }
         
         next();
     } catch (error) {

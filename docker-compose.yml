@@ -22,15 +22,12 @@ services:
     restart: always
     ports:
       - "5000:5000"
+      - "5555:5555"
     env_file:
-      - .env
+      - ./.env  # <--- THAY ĐỔI Ở ĐÂY: Trỏ ra file .env ở thư mục gốc
     environment:
-      # Kết nối nội bộ Docker dùng 'db' thay vì 'localhost'
-      DATABASE_URL: "postgresql://chatapp:1234@db:5432/chatapp_db?schema=public"
-      JWT_SECRET: ${JWT_SECRET}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
-      EMAIL_USER: ${EMAIL_USER}
-      EMAIL_PASS: ${EMAIL_PASS}
+      # Ghi đè DATABASE_URL để dùng trong mạng nội bộ Docker
+      DATABASE_URL=postgresql://chatapp:1234@db:5432/chatapp_db?schema=public
     depends_on:
       - db
     networks:

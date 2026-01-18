@@ -6,7 +6,7 @@ import {
   MessageCircle, Phone, Settings, LogOut, Search, 
   Send, Image, Paperclip, MoreVertical, Plus, Users, X, UserPlus, Check
 } from "lucide-react";
-import Friend from "./Friend";
+import Friends from "./Friends";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ const Home = () => {
   // Logic lấy lời mời kết bạn (Pending)
   const fetchPendingRequests = async () => {
     try {
-      const res = await api.get("/friendship/requests"); // Đảm bảo route này trả về danh sách PENDING
+      const res = await api.get("/friendships/requests"); // Đảm bảo route này trả về danh sách PENDING
       setPendingRequests(res.data);
     } catch (err) { console.error("Lỗi lấy lời mời:", err); }
   };
@@ -96,19 +96,25 @@ const Home = () => {
   // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
     try {
-        const res = await api.post("/auth/logout");
-        if (res.data.success) { alert(res.data.message); }
-    } catch (err) { console.error("Lỗi đăng xuất:", err); } finally {
+        // 1. Ngắt socket ngay lập tức
+        if (socket.current) socket.current.disconnect();
+
+        // 2. Gọi API (Dùng try-catch để nếu token hết hạn vẫn chạy tiếp xuống finally)
+        await api.post("/auth/logout");
+    } catch {
+        console.warn("API logout failed, clearing local data anyway...");
+    } finally {
+        // 3. LUÔN LUÔN xóa sạch local storage
         localStorage.clear();
         navigate("/login");
     }
-  };
+};
 
   // --- LOGIC XỬ LÝ BẠN BÈ ---
   const handleAddFriend = async () => {
     if (!emailSearch.trim()) return;
     try {
-      const res = await api.post('/friendship/send-request', { email: emailSearch });
+      const res = await api.post('/friendships/send-request', { email: emailSearch });
       alert(res.data.message || "Đã gửi lời mời!");
       setEmailSearch("");
     } catch (err) {
@@ -118,7 +124,7 @@ const Home = () => {
 
   const handleAcceptFriend = async (requestId) => {
     try {
-      await api.put(`/friendship/accept/${requestId}`);
+      await api.put(`/friendships/accept/${requestId}`);
       alert("Đã đồng ý kết bạn!");
       fetchPendingRequests(); // Load lại danh sách
     } catch { alert("Lỗi xác nhận"); }
@@ -140,6 +146,8 @@ const Home = () => {
             >
               <MessageCircle size={24} />
             </div>
+
+            
 
             {/* Tab Bạn bè (Mới thêm) */}
             <div 

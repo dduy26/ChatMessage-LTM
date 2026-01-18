@@ -22,7 +22,8 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
     (response) => {
-        if (response.config.url.includes('/auth/login') && response.data.accessToken) {
+        // Lưu token từ cả login và register
+        if ((response.config.url.includes('/auth/login') || response.config.url.includes('/auth/register')) && response.data.accessToken) {
             memoryToken = response.data.accessToken;
         }
         return response;

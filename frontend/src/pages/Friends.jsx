@@ -5,11 +5,13 @@ import { UserPlus, Check, X, Mail } from "lucide-react";
 const Friend = () => {
   const [email, setEmail] = useState("");
   const [requests, setRequests] = useState([]);
+  const [foundUser, setFoundUser] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // Load danh sách lời mời khi mở trang
   const loadRequests = useCallback(async () => {
     try {
-      const res = await api.get("/friendship/requests");
+      const res = await api.get("/friendships/requests");
       // Dữ liệu từ BE lúc này sẽ có dạng: [{ id, requester: { fullName, email } }]
       setRequests(res.data || []);
     } catch (err) {
@@ -21,12 +23,44 @@ const Friend = () => {
     loadRequests();
   }, [loadRequests]);
 
+  // Tìm kiếm người dùng khi nhập email
+  useEffect(() => {
+    const searchUser = async () => {
+      if (!email.trim()) {
+        setFoundUser(null);
+        return;
+      }
+
+      // Chỉ tìm kiếm nếu email hợp lệ
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setFoundUser(null);
+        return;
+      }
+
+      setSearchLoading(true);
+      try {
+        const res = await api.get(`/friendships/search?email=${encodeURIComponent(email)}`);
+        setFoundUser(res.data);
+      } catch{
+        setFoundUser(null);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    // Debounce tìm kiếm
+    const timeoutId = setTimeout(searchUser, 500);
+    return () => clearTimeout(timeoutId);
+  }, [email]);
+
   const handleAddFriend = async () => {
     if (!email.trim()) return alert("Vui lòng nhập email");
     try {
-      await api.post("/friendship/send-request", { email });
+      await api.post("/friendships/send-request", { email });
       alert("Đã gửi lời mời kết bạn!");
       setEmail("");
+      setFoundUser(null);
     } catch (err) {
       alert(err.response?.data?.error || "Lỗi gửi lời mời");
     }
@@ -34,7 +68,7 @@ const Friend = () => {
 
   const handleAccept = async (requestId) => {
     try {
-      await api.put(`/friendship/accept/${requestId}`);
+      await api.put(`/friendships/accept/${requestId}`);
       alert("Đã trở thành bạn bè!");
       loadRequests(); // Refresh danh sách
     } catch {
@@ -44,7 +78,7 @@ const Friend = () => {
 
   const handleReject = async (requestId) => {
     try {
-      await api.delete(`/friendship/${requestId}`);
+      await api.delete(`/friendships/${requestId}`);
       alert("Đã xóa lời mời");
       loadRequests(); // Refresh danh sách
     } catch {
@@ -74,11 +108,57 @@ const Friend = () => {
           </div>
           <button 
             onClick={handleAddFriend}
-            style={{ background: "#7360f2", color: "white", border: "none", padding: "0 25px", borderRadius: 12, fontWeight: "600", cursor: "pointer", transition: "0.2s" }}
+            disabled={!foundUser || searchLoading}
+            style={{ 
+              background: foundUser ? "#7360f2" : "#9ca3af", 
+              color: "white", 
+              border: "none", 
+              padding: "0 25px", 
+              borderRadius: 12, 
+              fontWeight: "600", 
+              cursor: foundUser ? "pointer" : "not-allowed", 
+              transition: "0.2s",
+              opacity: foundUser ? 1 : 0.6
+            }}
           >
-            Gửi
+            {searchLoading ? "Đang tìm..." : "Gửi"}
           </button>
         </div>
+        
+        {/* Hiển thị thông tin người dùng tìm được */}
+        {foundUser && (
+          <div style={{ 
+            marginTop: 15, 
+            padding: "12px 16px", 
+            background: "white", 
+            borderRadius: 12, 
+            border: "1px solid #e5e7eb",
+            display: "flex",
+            alignItems: "center",
+            gap: 12
+          }}>
+            <div style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: "10px", 
+              background: "#7360f2", 
+              color: "white", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              fontWeight: "bold", 
+              fontSize: 16 
+            }}>
+              {foundUser.fullName ? foundUser.fullName[0].toUpperCase() : "?"}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: "600", fontSize: 14, color: "#1f2937" }}>
+                {foundUser.fullName || "Người dùng"}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>{foundUser.email}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Danh sách */}
@@ -87,7 +167,7 @@ const Friend = () => {
         
         {requests.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: "#ccc" }}>
-             <p>Không có lời mời nào hiện tại.</p>
+            <p>Không có lời mời nào hiện tại.</p>
           </div>
         ) : (
           requests.map(r => (
@@ -96,10 +176,11 @@ const Friend = () => {
                 <div style={{ width: 45, height: 45, borderRadius: "14px", background: "#7360f2", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: 18 }}>
                   {r.requester?.fullName ? r.requester.fullName[0].toUpperCase() : "?"}
                 </div>
+                
                 <div>
-                  <div style={{ fontWeight: "700", fontSize: 15, color: "#1f2937" }}>{r.requester?.fullName || "Người dùng lạ"}</div>
+                  <div style={{ fontWeight: "700", fontSize: 15, color: "#1f2937" }}>{r.requester?.fullName || "Người dùng"}</div>
                   <div style={{ fontSize: 13, color: "#6b7280" }}>{r.requester?.email}</div>
-                </div>
+                </div> 
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button 

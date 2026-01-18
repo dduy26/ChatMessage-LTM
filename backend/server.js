@@ -5,7 +5,22 @@ const { Server } = require('socket.io');
 const prisma = require('./src/config/prisma');
 const jwt = require('jsonwebtoken');
 
+// Kiểm tra biến môi trường quan trọng khi khởi động
+const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+    console.error('❌ LỖI: Thiếu các biến môi trường bắt buộc:', missingEnvVars.join(', '));
+    console.error('⚠️  Vui lòng kiểm tra file .env hoặc cấu hình Docker!');
+    process.exit(1);
+}
+
+console.log('✅ Tất cả biến môi trường bắt buộc đã được cấu hình');
+console.log('📊 Database URL:', process.env.DATABASE_URL ? 'Đã cấu hình' : 'Chưa cấu hình');
+console.log('🔐 JWT_SECRET:', process.env.JWT_SECRET ? 'Đã cấu hình' : 'Chưa cấu hình');
+
 const PORT = process.env.PORT || 5000;
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -18,13 +33,7 @@ const io = new Server(server, {
 
 io.use(async(socket, next)=> {
     try {
-        // --- GIỮ NGUYÊN LOGIC DEBUG TOKEN CỦA BẠN ---
-        let token = socket.handshake.auth?.token || socket.handshake.query?.token;
-        
-        if (token && typeof token === 'string') {
-            token = token.trim(); 
-        }
-        
+        const token = socket.handshake.auth.token || socket.handshake.query.token;
         if(!token) {
             return next(new Error("Xác thực thất bại: Thiếu Token"));
         }
@@ -33,89 +42,57 @@ io.use(async(socket, next)=> {
             where: { token: token }
         });
 
+        //Kiểm tra token đã 401 
         if(isBlacklisted) {
             return next(new Error("Token đã bị vô hiệu hóa!"));
         }  
         
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
-        // Lấy thêm thông tin User từ DB để kiểm tra isVerified thực tế
-        const userInDb = await prisma.user.findUnique({
-            where: { id: Number(decoded.userId) }
-        });
-
-        if (!userInDb) return next(new Error("Người dùng không tồn tại"));
-
-        socket.user = { ...decoded, isVerified: userInDb.isVerified }; 
+        socket.user = decoded;
         next();
     } catch(error) {
-        if (error.name === 'JsonWebTokenError') return next(new Error("Token không hợp lệ"));
-        if (error.name === 'TokenExpiredError') return next(new Error("Token đã hết hạn"));
-        return next(new Error("Phiên đăng nhập không hợp lệ: " + error.message));
+        next(new Error("Phiên đăng nhập không hợp lệ"));
     }
 });
 
 io.on('connection', async (socket) => {
+    // Lấy userId từ token đã decode (phải ép kiểu Int nếu DB dùng Int)
+    const userId = parseInt(socket.user.userId);
+    console.log(`User connected: ${userId}`);
+
     try {
-        const rawUserId = socket.user?.userId || socket.user?.id;
-        const userId = Number(rawUserId);
-        
-        if (isNaN(userId)) {
-            socket.disconnect();
-            return;
-        }
-
-        socket.userId = userId;
-        console.log(`User connected: ${userId} - Verified: ${socket.user.isVerified}`);
-
+        // Cập nhật trạng thái ONLINE khi kết nối thành công
         await prisma.user.update({
             where: { id: userId },
-            data: { 
-                status: '#22c55e', // Trạng thái Online
-                isOnline: true    
-            }
+            data: { status: 'ONLINE' }
         });
         
-        // Gửi thông báo cho mọi người để cập nhật chấm xanh trên giao diện
-        io.emit('user_status_change', { 
-            userId, 
-            status: '#22c55e', 
-            isOnline: true,
-            isVerified: socket.user.isVerified 
-        });
+        // Thông báo cho các user khác (nếu cần)
+        socket.broadcast.emit('user_online', userId);
 
     } catch (error) {
-        console.error("Lỗi khi user kết nối:", error);
+        console.error("Lỗi cập nhật status ONLINE:", error);
     }
 
     socket.on('disconnect', async () => {
-        const userId = socket.userId;
-        if (userId) {
-            try {
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: { 
-                        status: '#94a3b8', // Trạng thái Offline
-                        isOnline: false,
-                        lastSeen: new Date() 
-                    }
-                });
-
-                // Thông báo mọi người user đã ngoại tuyến
-                io.emit('user_status_change', { 
-                    userId, 
-                    status: '#94a3b8', 
-                    isOnline: false 
-                });
-                
-                console.log(`User ${userId} disconnected`);
-            } catch (error) {
-                console.error("Lỗi cập nhật status OFFLINE:", error);
-            }
+        console.log(`User ${userId} disconnected`);
+        try {
+            // Cập nhật trạng thái OFFLINE khi ngắt kết nối
+            await prisma.user.update({
+                where: { id: userId },
+                data: { 
+                    status: 'OFFLINE',
+                    lastSeen: new Date() 
+                }
+            });
+            socket.broadcast.emit('user_offline', userId);
+        } catch (error) {
+            console.error("Lỗi cập nhật status OFFLINE:", error);
         }
     });
 });
 
+// Lắng nghe lỗi server để tránh crash
 server.on('error', (error) => {
     console.error(' Server Error:', error.message);
 });

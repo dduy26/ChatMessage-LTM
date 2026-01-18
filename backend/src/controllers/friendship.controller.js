@@ -3,11 +3,11 @@ const FriendshipService = require("../services/friendship.service");
 class FriendshipController{
     static async getPendingRequests(req, res) {
         try {
-            const userId = req.user.id;
+            const userId = req.user.userId || req.user.id;
             const requests = await FriendshipService.getPendingRequests(userId);
             return res.status(200).json(requests);
         } catch(error) {
-            return res.status(500).json({ error: err.message});
+            return res.status(500).json({ error: error.message});
         }
     }
 
@@ -33,8 +33,8 @@ class FriendshipController{
     // read
     static async getFriends(req,res){
         try {
-            const userId= req.user.id;
-            const friends = await FriendshipService.getFriend(parseInt (userId));
+            const userId = req.user.userId || req.user.id;
+            const friends = await FriendshipService.getFriend(parseInt(userId));
             res.json(friends);
         } catch (error){
             res.status(500).json({ error: error.message });//500 lỗi server k mong muốn
@@ -44,7 +44,7 @@ class FriendshipController{
     static async acceptRequest (req,res){
         try {// req.params: Lấy tham số trên URL.
             const {id} = req.params;
-            const result = await FriendshipService.acceptRequest(id);
+            const result = await FriendshipService.acceptRequest(parseInt(id));
             res.status(200).json({message : " Đã trở thành bạn bè .", data : result});
         }catch (error){
             res.status(400).json({ error: error.message });
@@ -61,34 +61,23 @@ class FriendshipController{
         }
     }
 
-    static async sendRequestByEmail(senderId, email) {
-        // 1. Tìm người dùng bằng email
-        const receiver = await prisma.user.findUnique({ where: { email } });
-
-        if (!receiver) throw new Error("Không tìm thấy người dùng với email này");
-
-        if (receiver.id === senderId) throw new Error("Bạn không thể kết bạn với chính mình");
-
-        // 2. Kiểm tra xem đã gửi lời mời chưa
-        const existing = await prisma.friendship.findFirst({
-            where: {
-                OR: [
-                    { userId: senderId, friendId: receiver.id },
-                    { userId: receiver.id, friendId: senderId }
-                ]
+    // Tìm kiếm người dùng theo email
+    static async searchUserByEmail(req, res) {
+        try {
+            const { email } = req.query;
+            if (!email) {
+                return res.status(400).json({ error: "Vui lòng nhập email" });
             }
-        });
 
-        if (existing) throw new Error("Yêu cầu đã tồn tại hoặc đã là bạn bè");
-
-        // 3. Tạo lời mời
-        return await prisma.friendship.create({
-            data: {
-                userId: senderId,
-                friendId: receiver.id,
-                status: 'PENDING'
+            const user = await FriendshipService.searchUserByEmail(email);
+            if (!user) {
+                return res.status(404).json({ error: "Không tìm thấy người dùng với email này" });
             }
-        });
+
+            return res.status(200).json(user);
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
+        }
     }
 }
 module.exports = FriendshipController;
