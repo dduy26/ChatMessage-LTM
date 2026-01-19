@@ -6,10 +6,10 @@ const nodemailer = require('nodemailer');
 
 // Kiểm tra biến môi trường khi module được load
 if (!process.env.JWT_SECRET) {
-    console.warn("⚠️  CẢNH BÁO: JWT_SECRET chưa được cấu hình!");
+    console.warn("CẢNH BÁO: JWT_SECRET chưa được cấu hình!");
 }
 if (!process.env.REFRESH_TOKEN_SECRET) {
-    console.warn("⚠️  CẢNH BÁO: REFRESH_TOKEN_SECRET chưa được cấu hình, sẽ dùng giá trị mặc định!");
+    console.warn("CẢNH BÁO: REFRESH_TOKEN_SECRET chưa được cấu hình, sẽ dùng giá trị mặc định!");
 }
 
 class AuthController {
@@ -100,9 +100,9 @@ class AuthController {
                         role: role || 'USER'
                     }
                 });
-                console.log("✅ User đã được tạo thành công với ID:", newUser.id);
+                console.log("User đã được tạo thành công với ID:", newUser.id);
             } catch (dbError) {
-                console.error("❌ Lỗi khi tạo user trong database:", dbError);
+                console.error("Lỗi khi tạo user trong database:", dbError);
                 throw new Error("Không thể tạo tài khoản: " + dbError.message);
             }
 
@@ -113,11 +113,11 @@ class AuthController {
             });
             
             if (!verifyUser) {
-                console.error("❌ LỖI NGHIÊM TRỌNG: User vừa tạo không tồn tại trong database!");
+                console.error("LỖI NGHIÊM TRỌNG: User vừa tạo không tồn tại trong database!");
                 return res.status(500).json({ error: "Lỗi hệ thống: Không thể xác minh tài khoản đã được tạo" });
             }
             
-            console.log("✅ Đã xác minh user tồn tại trong DB:", verifyUser.email);
+            console.log("Đã xác minh user tồn tại trong DB:", verifyUser.email);
 
             // 5. Tạo Token JWT giống như login (Để FE lưu lại và dùng cho Middleware)
             const userId = Number(newUser.id);
@@ -140,9 +140,9 @@ class AuthController {
                     process.env.REFRESH_TOKEN_SECRET || 'refresh_secret_key',
                     { expiresIn: '7d' } 
                 );
-                console.log("✅ Đã tạo JWT tokens thành công");
+                console.log("Đã tạo JWT tokens thành công");
             } catch (tokenError) {
-                console.error("❌ Lỗi khi tạo JWT tokens:", tokenError);
+                console.error("Lỗi khi tạo JWT tokens:", tokenError);
                 // User đã được tạo nhưng token lỗi - vẫn trả về success nhưng cảnh báo
                 return res.status(500).json({ 
                     error: "Tài khoản đã được tạo nhưng không thể tạo token đăng nhập. Vui lòng đăng nhập lại." 
@@ -157,7 +157,7 @@ class AuthController {
                 maxAge: 7 * 24 * 60 * 60 * 1000 
             });
 
-            console.log("✅ Đăng ký thành công cho user ID:", userId, "Email:", email);
+            console.log("Đăng ký thành công cho user ID:", userId, "Email:", email);
 
             return res.status(201).json({
                 message: "Đăng ký tài khoản thành công",
@@ -171,7 +171,7 @@ class AuthController {
             });
 
         } catch (error) {
-            console.error("❌ Lỗi trong quá trình đăng ký:", error);
+            console.error("Lỗi trong quá trình đăng ký:", error);
             console.error("Chi tiết lỗi:", error.message);
             console.error("Stack trace:", error.stack);
             return res.status(500).json({ error: "Lỗi đăng ký: " + error.message });
@@ -184,19 +184,27 @@ class AuthController {
 
             // Kiểm tra đầu vào
             if (!email || !password) {
-                return res.status(400).json({ error: "Email và mật khẩu không được để trống" });
+                return res.status(400).json({ error: "Vui lòng nhập đầy đủ email và mật khẩu" });
             }
 
             // Tìm user
             const user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
-                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+                return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng" });
+            }
+
+            // Kiểm tra tài khoản có bị khóa không
+            if (user.isBanned) {
+                return res.status(403).json({ 
+                    error: "Tài khoản của bạn đã bị khóa", 
+                    reason: user.banReason || "Vui lòng liên hệ quản trị viên" 
+                });
             }
 
             const isMatch = await bcrypt.compare(password, user.password);
 
             if (!isMatch) {
-                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+                return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng" });
             }
 
             const userId = Number(user.id);
@@ -364,11 +372,11 @@ class AuthController {
                 sameSite: 'Lax'
             });
 
-            console.log("✅ User đã đăng xuất thành công, token đã được blacklist");
+            console.log("User đã đăng xuất thành công, token đã được blacklist");
 
             return res.status(200).json({ message: "Đăng xuất thành công!" });
         } catch (error) {
-            console.error("❌ Lỗi khi đăng xuất:", error);
+            console.error("Lỗi khi đăng xuất:", error);
             return res.status(500).json({ error: "Có lỗi xảy ra khi đăng xuất: " + error.message });
         }
     }   

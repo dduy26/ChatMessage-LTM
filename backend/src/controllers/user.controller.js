@@ -86,6 +86,17 @@ class UserController {
     static async updateProfile(req, res) {
         try {
             const userId = parseInt(req.user.userId, 10); 
+            
+            if (isNaN(userId) || userId <= 0) {
+                return res.status(400).json({ error: "ID người dùng không hợp lệ" });
+            }
+
+            // Kiểm tra user có tồn tại không
+            const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+            if (!existingUser) {
+                return res.status(404).json({ error: "Không tìm thấy tài khoản" });
+            }
+
             const { fullName, phoneNumber, bio, status } = req.body; 
 
             const updatedUser = await prisma.user.update({
@@ -104,6 +115,10 @@ class UserController {
             });
         } catch (error) {
             console.error("Lỗi updateProfile:", error);
+            // Xử lý lỗi Prisma cụ thể
+            if (error.code === 'P2025') {
+                return res.status(404).json({ error: "Không tìm thấy tài khoản để cập nhật" });
+            }
             res.status(400).json({ error: "Lỗi cập nhật: " + error.message });
         }
     }
