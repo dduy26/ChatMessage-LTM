@@ -4,6 +4,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 
+// Kiểm tra biến môi trường khi module được load
+if (!process.env.JWT_SECRET) {
+    console.warn("CẢNH BÁO: JWT_SECRET chưa được cấu hình!");
+}
+if (!process.env.REFRESH_TOKEN_SECRET) {
+    console.warn("CẢNH BÁO: REFRESH_TOKEN_SECRET chưa được cấu hình, sẽ dùng giá trị mặc định!");
+}
+
 class AuthController {
     static async requestOTP(req, res) {
         try {
@@ -60,6 +68,12 @@ class AuthController {
                 return res.status(400).json({ error: "Email, password và username là bắt buộc" });
             }
 
+            // 1.1. Kiểm tra biến môi trường quan trọng
+            if (!process.env.JWT_SECRET) {
+                console.error("LỖI: JWT_SECRET chưa được cấu hình trong biến môi trường!");
+                return res.status(500).json({ error: "Lỗi cấu hình hệ thống: Thiếu JWT_SECRET" });
+            }
+
             // 2. Kiểm tra email/username đã tồn tại chưa
             const existingUser = await prisma.user.findFirst({
                 where: { OR: [{ email }, { username }] }
@@ -71,38 +85,96 @@ class AuthController {
             // 3. Mã hóa mật khẩu
             const hashedPassword = await bcrypt.hash(password, 10);
 
-            // 4. Tạo User mới
-            const newUser = await prisma.user.create({
-                data: {
-                    email,
-                    username,
-                    password: hashedPassword,
-                    fullName,
-                    phoneNumber,
-                    role: role || 'USER'
-                }
-            });
+            // 4. Tạo User mới - Sử dụng transaction để đảm bảo atomicity
+            console.log("Đang tạo user mới với email:", email, "username:", username);
+            
+            let newUser;
+            try {
+                newUser = await prisma.user.create({
+                    data: {
+                        email,
+                        username,
+                        password: hashedPassword,
+                        fullName,
+                        phoneNumber,
+                        role: role || 'USER'
+                    }
+                });
+                console.log("User đã được tạo thành công với ID:", newUser.id);
+            } catch (dbError) {
+                console.error("Lỗi khi tạo user trong database:", dbError);
+                throw new Error("Không thể tạo tài khoản: " + dbError.message);
+            }
 
-            // 5. Tạo Token JWT (Để FE lưu lại và dùng cho Middleware)
+            // 4.1. Verify lại user đã được lưu vào DB
+            const verifyUser = await prisma.user.findUnique({ 
+                where: { id: newUser.id },
+                select: { id: true, email: true, username: true }
+            });
+            
+            if (!verifyUser) {
+                console.error("LỖI NGHIÊM TRỌNG: User vừa tạo không tồn tại trong database!");
+                return res.status(500).json({ error: "Lỗi hệ thống: Không thể xác minh tài khoản đã được tạo" });
+            }
+            
+            console.log("Đã xác minh user tồn tại trong DB:", verifyUser.email);
+
+            // 5. Tạo Token JWT giống như login (Để FE lưu lại và dùng cho Middleware)
             const userId = Number(newUser.id);
             if (isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
                 console.error("newUser.id không hợp lệ:", newUser.id);
                 return res.status(500).json({ error: "Lỗi hệ thống: ID người dùng không hợp lệ" });
             }
             
-            const token = jwt.sign(
-                { userId: userId, email: newUser.email, role: newUser.role },
-                process.env.JWT_SECRET,
-                { expiresIn: '7d' } // Token hết hạn sau 7 ngày
-            );
+            // Tạo AccessToken và RefreshToken giống login
+            let accessToken, refreshToken;
+            try {
+                accessToken = jwt.sign(
+                    { userId: userId, email: newUser.email, role: newUser.role },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '15m' } 
+                );
+
+                refreshToken = jwt.sign(
+                    { userId },
+                    process.env.REFRESH_TOKEN_SECRET || 'refresh_secret_key',
+                    { expiresIn: '7d' } 
+                );
+                console.log("Đã tạo JWT tokens thành công");
+            } catch (tokenError) {
+                console.error("Lỗi khi tạo JWT tokens:", tokenError);
+                // User đã được tạo nhưng token lỗi - vẫn trả về success nhưng cảnh báo
+                return res.status(500).json({ 
+                    error: "Tài khoản đã được tạo nhưng không thể tạo token đăng nhập. Vui lòng đăng nhập lại." 
+                });
+            }
+
+            // HTTPONLY COOKIE cho refreshToken
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: false, 
+                sameSite: 'Lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000 
+            });
+
+            console.log("Đăng ký thành công cho user ID:", userId, "Email:", email);
 
             return res.status(201).json({
                 message: "Đăng ký tài khoản thành công",
-                token,
-                user: { id: newUser.id, email: newUser.email, fullName: newUser.fullName }
+                accessToken,
+                user: { 
+                    id: newUser.id, 
+                    email: newUser.email, 
+                    fullName: newUser.fullName,
+                    role: newUser.role,
+                    avatar: newUser.avatar // Thêm avatar vào response
+                }
             });
 
         } catch (error) {
+            console.error("Lỗi trong quá trình đăng ký:", error);
+            console.error("Chi tiết lỗi:", error.message);
+            console.error("Stack trace:", error.stack);
             return res.status(500).json({ error: "Lỗi đăng ký: " + error.message });
         }
     }
@@ -113,19 +185,27 @@ class AuthController {
 
             // Kiểm tra đầu vào
             if (!email || !password) {
-                return res.status(400).json({ error: "Email và mật khẩu không được để trống" });
+                return res.status(400).json({ error: "Vui lòng nhập đầy đủ email và mật khẩu" });
             }
 
             // Tìm user
             const user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
-                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+                return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng" });
+            }
+
+            // Kiểm tra tài khoản có bị khóa không
+            if (user.isBanned) {
+                return res.status(403).json({ 
+                    error: "Tài khoản của bạn đã bị khóa", 
+                    reason: user.banReason || "Vui lòng liên hệ quản trị viên" 
+                });
             }
 
             const isMatch = await bcrypt.compare(password, user.password);
 
             if (!isMatch) {
-                return res.status(401).json({ error: "Email hoặc mật khẩu không chính xác" });
+                return res.status(401).json({ error: "Tài khoản hoặc mật khẩu không đúng" });
             }
 
             const userId = Number(user.id);
@@ -134,7 +214,7 @@ class AuthController {
             const accessToken = jwt.sign(
                 { userId, email: user.email, role: user.role },
                 process.env.JWT_SECRET,
-                { expiresIn: '15p' } 
+                { expiresIn: '15m' } 
             );
 
             const refreshToken = jwt.sign(
@@ -158,7 +238,8 @@ class AuthController {
                     id: user.id,
                     email: user.email,
                     fullName: user.fullName,
-                    role: user.role
+                    role: user.role,
+                    avatar: user.avatar // Thêm avatar vào response
                 }
             });
 
@@ -260,10 +341,23 @@ class AuthController {
     static async logout(req, res) {
         try {
             const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                return res.status(400).json({ error: "Không tìm thấy token" });
+            }
+
             const token = authHeader.split(" ")[1];
+            if (!token) {
+                return res.status(400).json({ error: "Token không hợp lệ" });
+            }
+
             const decoded = jwt.decode(token);
+            if (!decoded || !decoded.exp) {
+                return res.status(400).json({ error: "Token không hợp lệ" });
+            }
+
             const expiresAt = new Date(decoded.exp * 1000);
 
+            // Lưu token vào blacklist
             await prisma.blackListedToken.upsert({
                 where: { token: token },
                 update: {}, 
@@ -272,9 +366,20 @@ class AuthController {
                     expiresAt: expiresAt
                 }
             });
+
+            // Xóa refreshToken cookie
+            res.clearCookie('refreshToken', {
+                httpOnly: true,
+                secure: false,
+                sameSite: 'Lax'
+            });
+
+            console.log("User đã đăng xuất thành công, token đã được blacklist");
+
             return res.status(200).json({ message: "Đăng xuất thành công!" });
         } catch (error) {
-            return res.status(500).json({ message: "Có lỗi xảy ra khi đăng xuất" });
+            console.error("Lỗi khi đăng xuất:", error);
+            return res.status(500).json({ error: "Có lỗi xảy ra khi đăng xuất: " + error.message });
         }
     }   
 
@@ -349,6 +454,7 @@ class AuthController {
             return res.status(400).send("<h1>Xác minh thất bại</h1><p>Link đã hết hạn hoặc không hợp lệ.</p>");
         }
     }
+    
 }
 
 module.exports = AuthController;

@@ -1,0 +1,53 @@
+services:
+  # 1. Database
+  db:
+    image: postgres:18-alpine
+    container_name: chat-app-db
+    restart: always
+    environment:
+      POSTGRES_USER: chatapp
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: chatapp_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chat-network
+
+  # 2. Backend
+  backend:
+    build: ./backend
+    container_name: chat-app-backend
+    restart: always
+    ports:
+      - "5000:5000"
+      - "5555:5555"
+    env_file:
+      - ./.env  # <--- THAY ĐỔI Ở ĐÂY: Trỏ ra file .env ở thư mục gốc
+    environment:
+      # Ghi đè DATABASE_URL để dùng trong mạng nội bộ Docker
+      DATABASE_URL: postgresql://chatapp:1234@db:5432/chatapp_db?schema=public
+    depends_on:
+      - db
+    networks:
+      - chat-network
+
+  # 3. Frontend
+  frontend:
+    build: ./frontend
+    container_name: chat-app-frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - chat-network
+
+volumes:
+  postgres_data:
+
+networks:
+  chat-network:
+    driver: bridge

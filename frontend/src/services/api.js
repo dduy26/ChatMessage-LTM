@@ -2,6 +2,12 @@ import axios from 'axios';
 
 let memoryToken = null;
 
+// Khôi phục token từ localStorage khi khởi động
+const savedToken = localStorage.getItem('accessToken');
+if (savedToken) {
+    memoryToken = savedToken;
+}
+
 const api = axios.create({
     baseURL: 'http://localhost:5000/api', 
     withCredentials: true,
@@ -12,8 +18,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
     (config) => {
-        if (memoryToken) {
-            config.headers.Authorization = `Bearer ${memoryToken}`;
+        // Ưu tiên dùng memoryToken, nếu không có thì lấy từ localStorage
+        const token = memoryToken || localStorage.getItem('accessToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
@@ -22,8 +30,15 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
     (response) => {
-        if (response.config.url.includes('/auth/login') && response.data.accessToken) {
+        // Lưu token từ cả login và register vào cả memory và localStorage
+        if ((response.config.url.includes('/auth/login') || response.config.url.includes('/auth/register')) && response.data.accessToken) {
             memoryToken = response.data.accessToken;
+            localStorage.setItem('accessToken', response.data.accessToken);
+        }
+        // Lưu token từ refresh-token
+        if (response.config.url.includes('/auth/refresh-token') && response.data.accessToken) {
+            memoryToken = response.data.accessToken;
+            localStorage.setItem('accessToken', response.data.accessToken);
         }
         return response;
     }, 
@@ -42,7 +57,8 @@ api.interceptors.response.use(
                 );
 
                 const { accessToken } = res.data;
-                memoryToken = accessToken; 
+                memoryToken = accessToken;
+                localStorage.setItem('accessToken', accessToken);
 
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 return api(originalRequest);
@@ -54,6 +70,7 @@ api.interceptors.response.use(
                     alert("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại!");
                     
                     memoryToken = null;
+                    localStorage.removeItem("accessToken");
                     localStorage.removeItem("user");
                     window.location.href = "/login";
                 }

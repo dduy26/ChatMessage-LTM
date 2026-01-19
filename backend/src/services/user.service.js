@@ -12,16 +12,17 @@ class UserService {
         });
     }
 
-    static async getById(id) {
-    const numericId = Number(id); // Chuyển đổi tham số truyền vào thành số
-    if (isNaN(numericId)) {
-        console.error("getById: id không hợp lệ:", id);
-        return null;
+    static async getById(id) { 
+        const numericId = Number(id);
+
+        if (!id || isNaN(numericId)) {
+            return null;
+        }
+
+        return await prisma.user.findUnique({
+            where: { id: numericId },
+        });
     }
-    return await prisma.user.findUnique({
-        where: { id: numericId } // Tìm kiếm theo ID kiểu Int
-    });
-}
 
     static update(id, data) { 
         return prisma.user.update({
