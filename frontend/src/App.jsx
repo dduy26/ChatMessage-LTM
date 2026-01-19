@@ -6,6 +6,7 @@ import Register from "./pages/Register";
 import Home from "./pages/Home";
 import ForgotPassword from "./pages/Forgotpassword";
 import Profile from "./pages/Profile";
+import Friends from "./pages/Friends";
 
 // 1. Sửa ProtectedRoute: Kiểm tra user thay vì token
 const ProtectedRoute = ({ children }) => {
@@ -56,6 +57,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/friend"
+          element={
+            <ProtectedRoute>
+              <Friends />
             </ProtectedRoute>
           }
         />

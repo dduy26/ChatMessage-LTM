@@ -98,7 +98,7 @@ const Profile = () => {
                 bio: formData.bio
             };
             
-            const res = await api.put("/auth/update", updateData);
+            const res = await api.put("/users/update", updateData);
             setSuccessMsg(res.data.message || "Cập nhật hồ sơ thành công!");
             
             if (res.data.user) {

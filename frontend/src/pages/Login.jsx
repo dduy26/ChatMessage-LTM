@@ -22,17 +22,21 @@ const Login = () => {
       const res = await api.post("/auth/login", { email, password });
       
       // 2. Lấy dữ liệu từ response
-      const {  user } = res.data;
+      const { accessToken, user } = res.data;
 
       // 3. Lưu trữ vào LocalStorage cho hệ thống Token và Profile
-      
+      if (accessToken) {
+        localStorage.setItem("accessToken", accessToken);
+      }
       localStorage.setItem("user", JSON.stringify(user));
 
       console.log("Đăng nhập thành công!");
       navigate("/"); // Chuyển về trang chủ
     } catch (err) {
-      // Hiển thị lỗi từ Backend (Ví dụ: "Email không tồn tại" hoặc "Sai mật khẩu")
-      setError(err.response?.data?.message || "Đăng nhập thất bại. Vui lòng thử lại.");
+      // Hiển thị lỗi từ Backend (Ví dụ: "Tài khoản hoặc mật khẩu không đúng")
+      const errorMessage = err.response?.data?.error || err.response?.data?.message || "Tài khoản hoặc mật khẩu không đúng!";
+      setError(errorMessage);
+      console.error("Lỗi đăng nhập:", err.response?.data);
     } finally {
       setLoading(false);
     }

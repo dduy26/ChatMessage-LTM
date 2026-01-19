@@ -21,6 +21,9 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' hoặc 'friends'
   const [emailSearch, setEmailSearch] = useState("");
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [foundUser, setFoundUser] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -51,6 +54,8 @@ const Home = () => {
 
     // Lấy lời mời kết bạn khi vào trang
     fetchPendingRequests();
+    // Lấy danh sách bạn bè khi vào trang
+    fetchFriends();
 
     return () => socket.current.disconnect();
   }, []);
@@ -61,6 +66,14 @@ const Home = () => {
       const res = await api.get("/friendships/requests"); // Đảm bảo route này trả về danh sách PENDING
       setPendingRequests(res.data);
     } catch (err) { console.error("Lỗi lấy lời mời:", err); }
+  };
+
+  // Logic lấy danh sách bạn bè
+  const fetchFriends = async () => {
+    try {
+      const res = await api.get("/friendships/friends");
+      setFriends(res.data || []);
+    } catch (err) { console.error("Lỗi lấy danh sách bạn bè:", err); }
   };
 
   // 2. Lấy tin nhắn (Giữ nguyên)
@@ -111,23 +124,98 @@ const Home = () => {
 };
 
   // --- LOGIC XỬ LÝ BẠN BÈ ---
-  const handleAddFriend = async () => {
-    if (!emailSearch.trim()) return;
+  const handleSearchUser = async () => {
+    if (!emailSearch.trim()) {
+      setFoundUser(null);
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailSearch.trim())) {
+      setFoundUser(null);
+      return;
+    }
+
+    setSearchLoading(true);
     try {
-      const res = await api.post('/friendships/send-request', { email: emailSearch });
-      alert(res.data.message || "Đã gửi lời mời!");
-      setEmailSearch("");
+      const res = await api.get(`/friendships/search?email=${encodeURIComponent(emailSearch.trim())}`);
+      setFoundUser(res.data);
     } catch (err) {
-      alert(err.response?.data?.error || "Không tìm thấy người dùng!");
+      setFoundUser(null);
+      console.error("Không tìm thấy user:", err);
+    } finally {
+      setSearchLoading(false);
     }
   };
+
+  const handleAddFriend = async () => {
+    if (!emailSearch.trim()) {
+      alert("Vui lòng nhập email");
+      return;
+    }
+
+    if (!foundUser) {
+      // Nếu chưa tìm thấy user, tìm kiếm trước
+      await handleSearchUser();
+      if (!foundUser) {
+        alert("Không tìm thấy người dùng với email này");
+        return;
+      }
+    }
+
+    try {
+      await api.post('/friendships/send-request', { email: emailSearch.trim() });
+      alert("Đã gửi lời mời kết bạn!");
+      setEmailSearch("");
+      setFoundUser(null);
+      fetchPendingRequests(); // Refresh danh sách lời mời
+    } catch (err) {
+      alert(err.response?.data?.error || "Không thể gửi lời mời kết bạn");
+    }
+  };
+
+  // Tự động tìm kiếm khi nhập email (debounce)
+  useEffect(() => {
+    if (activeTab === 'friends' && emailSearch.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailSearch.trim())) {
+        setFoundUser(null);
+        return;
+      }
+
+      const timeoutId = setTimeout(async () => {
+        setSearchLoading(true);
+        try {
+          const res = await api.get(`/friendships/search?email=${encodeURIComponent(emailSearch.trim())}`);
+          setFoundUser(res.data);
+        } catch {
+          setFoundUser(null);
+        } finally {
+          setSearchLoading(false);
+        }
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else if (activeTab === 'friends' && !emailSearch.trim()) {
+      setFoundUser(null);
+    }
+  }, [emailSearch, activeTab]);
 
   const handleAcceptFriend = async (requestId) => {
     try {
       await api.put(`/friendships/accept/${requestId}`);
       alert("Đã đồng ý kết bạn!");
-      fetchPendingRequests(); // Load lại danh sách
+      fetchPendingRequests(); // Load lại danh sách lời mời
+      fetchFriends(); // Load lại danh sách bạn bè
     } catch { alert("Lỗi xác nhận"); }
+  };
+
+  const handleRejectFriend = async (requestId) => {
+    try {
+      await api.delete(`/friendships/${requestId}`);
+      alert("Đã từ chối lời mời");
+      fetchPendingRequests(); // Load lại danh sách lời mời
+    } catch { alert("Lỗi khi từ chối"); }
   };
 
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
@@ -224,27 +312,89 @@ const Home = () => {
                     placeholder="Nhập email..." 
                     value={emailSearch}
                     onChange={(e) => setEmailSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddFriend()}
                   />
                 </div>
-                <button onClick={handleAddFriend} style={{ background: '#7360f2', color: 'white', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer' }}>
+                <button 
+                  onClick={handleAddFriend} 
+                  disabled={searchLoading || !foundUser}
+                  style={{ 
+                    background: (foundUser && !searchLoading) ? '#7360f2' : '#9ca3af', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '50%', 
+                    width: 32, 
+                    height: 32, 
+                    cursor: (foundUser && !searchLoading) ? 'pointer' : 'not-allowed',
+                    opacity: (foundUser && !searchLoading) ? 1 : 0.6
+                  }}
+                >
                   <UserPlus size={18} />
                 </button>
               </div>
+              
+              {/* Hiển thị kết quả tìm kiếm */}
+              {foundUser && (
+                <div style={{ 
+                  margin: '10px 15px', 
+                  padding: '12px', 
+                  background: 'white', 
+                  borderRadius: 12, 
+                  border: '1px solid #e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12
+                }}>
+                  <img 
+                    src={getAvatar(foundUser.fullName, foundUser.avatar)} 
+                    style={{ width: 40, height: 40, borderRadius: '50%' }} 
+                    alt="" 
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
+                      {foundUser.fullName || "Người dùng"}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>{foundUser.email}</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
-              <h4 style={{ fontSize: 12, color: '#aaa', marginBottom: 10 }}>LỜI MỜI KẾT BẠN ({pendingRequests.length})</h4>
+              {/* Danh sách bạn bè */}
+              <h4 style={{ fontSize: 12, color: '#aaa', marginBottom: 10, marginTop: 10 }}>DANH SÁCH BẠN BÈ ({friends.length})</h4>
+              {friends.length > 0 ? (
+                friends.map(friend => (
+                  <div key={friend.id} className="conv-item" style={{ borderRadius: 12, marginBottom: 8, background: '#f9f9f9' }}>
+                    <img 
+                      src={getAvatar(friend.username || friend.fullName, friend.avatar)} 
+                      style={{ width: 40, height: 40, borderRadius: '50%', marginRight: 12 }} 
+                      alt="" 
+                    />
+                    <div className="conv-info" style={{ flex: 1 }}>
+                      <h4 style={{ fontSize: 14 }}>{friend.username || friend.fullName || "Người dùng"}</h4>
+                      <p style={{ fontSize: 11, color: '#6b7280' }}>Đã là bạn bè</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: 12 }}>
+                  Chưa có bạn bè nào
+                </div>
+              )}
+
+              <h4 style={{ fontSize: 12, color: '#aaa', marginBottom: 10, marginTop: 20 }}>LỜI MỜI KẾT BẠN ({pendingRequests.length})</h4>
               {pendingRequests.map(req => (
                 <div key={req.id} className="conv-item" style={{ borderRadius: 12, marginBottom: 8, background: '#f9f9f9' }}>
                    <div className="conv-info">
-                      <h4 style={{ fontSize: 14 }}>{req.sender?.fullName || "Người dùng"}</h4>
-                      <p style={{ fontSize: 11 }}>{req.sender?.email}</p>
+                      <h4 style={{ fontSize: 14 }}>{req.requester?.fullName || "Người dùng"}</h4>
+                      <p style={{ fontSize: 11 }}>{req.requester?.email}</p>
                    </div>
                    <div style={{ display: 'flex', gap: 5 }}>
                       <button onClick={() => handleAcceptFriend(req.id)} style={{ background: '#22c55e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
                         <Check size={16} />
                       </button>
-                      <button style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
+                      <button onClick={() => handleRejectFriend(req.id)} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
                         <X size={16} />
                       </button>
                    </div>
