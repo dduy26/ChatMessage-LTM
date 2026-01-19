@@ -66,16 +66,48 @@ class FriendshipService {
         });
     }
 
-    static async acceptRequest(friendshipId){
+    static async acceptRequest(friendshipId, userId){
+        // Kiểm tra friendship có tồn tại không
+        const friendship = await prisma.friendship.findUnique({
+            where: { id: friendshipId }
+        });
+
+        if (!friendship) {
+            throw new Error("Không tìm thấy lời mời kết bạn");
+        }
+
+        // Kiểm tra user có phải là người nhận không (chỉ người nhận mới được chấp nhận)
+        if (friendship.addresseeId !== userId) {
+            throw new Error("Bạn không có quyền chấp nhận lời mời kết bạn này");
+        }
+
+        // Kiểm tra status
+        if (friendship.status !== "PENDING") {
+            throw new Error("Lời mời kết bạn này đã được xử lý");
+        }
+
         return prisma.friendship.update({
             where: { id: friendshipId }, 
             data: { status: "ACCEPTED" }, 
         });
-
     }
-    static async remove(friendshipId){
+    static async remove(friendshipId, userId){
+        // Kiểm tra friendship có tồn tại không
+        const friendship = await prisma.friendship.findUnique({
+            where: { id: friendshipId }
+        });
+
+        if (!friendship) {
+            throw new Error("Không tìm thấy lời mời kết bạn");
+        }
+
+        // Kiểm tra user có phải là người gửi hoặc người nhận không
+        if (friendship.requesterId !== userId && friendship.addresseeId !== userId) {
+            throw new Error("Bạn không có quyền xóa lời mời kết bạn này");
+        }
+
         return prisma.friendship.delete({
-            where: { id: friendshipId }, // tìm lời mời kết bạn theo ID
+            where: { id: friendshipId },
         });
     }
     static async getFriend(userId){

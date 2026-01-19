@@ -49,3 +49,4 @@ docker-compose up --build
 docker-compose up
 docker-compose up -d --build
 docker-compose exec backend npx prisma db push
+docker logs -f chat-app-backend

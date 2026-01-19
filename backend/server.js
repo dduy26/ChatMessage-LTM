@@ -64,11 +64,14 @@ io.on('connection', async (socket) => {
         // Cập nhật trạng thái ONLINE khi kết nối thành công
         await prisma.user.update({
             where: { id: userId },
-            data: { status: 'ONLINE' }
+            data: { isOnline: true }
         });
         
-        // Thông báo cho các user khác (nếu cần)
-        socket.broadcast.emit('user_online', userId);
+        // Thông báo cho các user khác về trạng thái online
+        socket.broadcast.emit('user_status_change', {
+            userId: userId,
+            isOnline: true
+        });
 
     } catch (error) {
         console.error("Lỗi cập nhật status ONLINE:", error);
@@ -81,11 +84,15 @@ io.on('connection', async (socket) => {
             await prisma.user.update({
                 where: { id: userId },
                 data: { 
-                    status: 'OFFLINE',
+                    isOnline: false,
                     lastSeen: new Date() 
                 }
             });
-            socket.broadcast.emit('user_offline', userId);
+            // Thông báo cho các user khác về trạng thái offline
+            socket.broadcast.emit('user_status_change', {
+                userId: userId,
+                isOnline: false
+            });
         } catch (error) {
             console.error("Lỗi cập nhật status OFFLINE:", error);
         }

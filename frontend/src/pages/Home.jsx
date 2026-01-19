@@ -24,6 +24,9 @@ const Home = () => {
   const [foundUser, setFoundUser] = useState(null);
   const [friends, setFriends] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  
+  // State cho tìm kiếm bạn bè trong conversation
+  const [conversationSearch, setConversationSearch] = useState("");
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -34,12 +37,49 @@ const Home = () => {
     });
 
     socket.current.on("user_status_change", (data) => {
+      console.log("User status changed:", data);
+      
+      // Cập nhật trạng thái trong conversations
       setConversations((prev) =>
         prev.map((conv) => {
           if (conv.participantId === data.userId) {
             return { ...conv, isOnline: data.isOnline };
           }
           return conv;
+        })
+      );
+
+      // Cập nhật trạng thái trong currentChat
+      setCurrentChat((prev) => {
+        if (prev && prev.participantId === data.userId) {
+          return { ...prev, isOnline: data.isOnline };
+        }
+        return prev;
+      });
+
+      // Cập nhật trạng thái trong messages (cập nhật sender.isOnline)
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.senderId === data.userId && msg.sender) {
+            return {
+              ...msg,
+              sender: {
+                ...msg.sender,
+                isOnline: data.isOnline
+              }
+            };
+          }
+          return msg;
+        })
+      );
+
+      // Cập nhật trạng thái trong friends list
+      setFriends((prev) =>
+        prev.map((friend) => {
+          if (friend.id === data.userId) {
+            return { ...friend, isOnline: data.isOnline };
+          }
+          return friend;
         })
       );
     });
@@ -76,17 +116,31 @@ const Home = () => {
     } catch (err) { console.error("Lỗi lấy danh sách bạn bè:", err); }
   };
 
-  // 2. Lấy tin nhắn (Giữ nguyên)
+  // 2. Lấy tin nhắn và cập nhật trạng thái
   useEffect(() => {
     if (!currentChat) return;
     const fetchMessages = async () => {
       try {
         const res = await api.get(`/messages/conversation/${currentChat.id}`);
         setMessages(res.data);
+        
+        // Cập nhật trạng thái online từ messages nếu có
+        if (res.data.length > 0) {
+          const otherUserMessages = res.data.filter(msg => msg.senderId !== user.id);
+          if (otherUserMessages.length > 0) {
+            const otherUser = otherUserMessages[0].sender;
+            if (otherUser && currentChat.participantId === otherUser.id) {
+              setCurrentChat(prev => ({
+                ...prev,
+                isOnline: otherUser.isOnline || false
+              }));
+            }
+          }
+        }
       } catch (err) { console.error(err); }
     };
     fetchMessages();
-  }, [currentChat]);
+  }, [currentChat, user.id]);
 
   // 3. Auto scroll (Giữ nguyên)
   useEffect(() => {
@@ -218,6 +272,94 @@ const Home = () => {
     } catch { alert("Lỗi khi từ chối"); }
   };
 
+  // Tìm hoặc tạo conversation với bạn bè
+  const handleStartConversation = async (friend) => {
+    try {
+      // Tìm conversation đã tồn tại với bạn này
+      // Kiểm tra theo participantId hoặc title
+      const existingConv = conversations.find(conv => {
+        if (conv.participantId === friend.id) return true;
+        if (conv.title === friend.username || conv.title === friend.fullName) return true;
+        return false;
+      });
+
+      if (existingConv) {
+        setCurrentChat(existingConv);
+        setConversationSearch(""); // Clear search
+        return;
+      }
+
+      // Tạo conversation mới
+      const convRes = await api.post("/conversations", {
+        type: "DIRECT"
+      });
+
+      // Thêm cả 2 người vào conversation
+      await api.post("/participants", {
+        userId: user.id,
+        conversationId: convRes.data.id,
+        role: "MEMBER"
+      });
+
+      await api.post("/participants", {
+        userId: friend.id,
+        conversationId: convRes.data.id,
+        role: "MEMBER"
+      });
+
+      // Tạo conversation object để hiển thị
+      const conversationToDisplay = {
+        ...convRes.data,
+        title: friend.fullName || friend.username || "Người dùng",
+        avatar: friend.avatar,
+        participantId: friend.id,
+        isOnline: false
+      };
+
+      // Refresh danh sách conversations và set current chat
+      const fetchConversations = async () => {
+        try {
+          const res = await api.get("/conversations");
+          setConversations(res.data);
+          // Tìm conversation vừa tạo hoặc sử dụng conversation object đã tạo
+          const createdConv = res.data.find(c => c.id === convRes.data.id);
+          if (createdConv) {
+            setCurrentChat({
+              ...createdConv,
+              title: friend.fullName || friend.username || "Người dùng",
+              avatar: friend.avatar,
+              participantId: friend.id
+            });
+          } else {
+            // Nếu không tìm thấy trong danh sách, dùng conversation object đã tạo
+            setCurrentChat(conversationToDisplay);
+            setConversations([conversationToDisplay, ...res.data]);
+          }
+        } catch (err) { 
+          console.error(err);
+          // Nếu fetch lỗi, vẫn set conversation đã tạo
+          setCurrentChat(conversationToDisplay);
+          setConversations([conversationToDisplay, ...conversations]);
+        }
+      };
+      await fetchConversations();
+      
+      setConversationSearch(""); // Clear search
+    } catch (err) {
+      console.error("Lỗi tạo conversation:", err);
+      alert(err.response?.data?.error || "Không thể tạo cuộc trò chuyện");
+    }
+  };
+
+  // Filter bạn bè dựa trên search query
+  const filteredFriends = friends.filter(friend => {
+    if (!conversationSearch.trim()) return false;
+    const searchLower = conversationSearch.toLowerCase();
+    const name = (friend.fullName || friend.username || "").toLowerCase();
+    const email = (friend.email || "").toLowerCase();
+    return name.includes(searchLower) || email.includes(searchLower);
+  });
+
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
 
   return (
@@ -272,12 +414,66 @@ const Home = () => {
             <div className="search-bar">
                 <div style={{display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:20, padding:'0 15px'}}>
                   <Search size={16} color="#888" />
-                  <input className="search-input" placeholder="Tìm kiếm cuộc trò chuyện..." />
+                  <input 
+                    className="search-input" 
+                    placeholder="Tìm kiếm cuộc trò chuyện hoặc bạn bè..." 
+                    value={conversationSearch}
+                    onChange={(e) => setConversationSearch(e.target.value)}
+                  />
                 </div>
             </div>
             
             <div style={{flex:1, overflowY:'auto'}}>
-              {conversations.map(conv => (
+              {/* Hiển thị kết quả tìm kiếm bạn bè */}
+              {conversationSearch.trim() && filteredFriends.length > 0 && (
+                <div style={{ padding: '10px 15px', borderBottom: '1px solid #e5e7eb' }}>
+                  <h4 style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, fontWeight: '600' }}>BẠN BÈ</h4>
+                  {filteredFriends.map(friend => (
+                    <div 
+                      key={friend.id}
+                      className="conv-item"
+                      onClick={() => handleStartConversation(friend)}
+                      style={{ 
+                        cursor: 'pointer',
+                        borderRadius: 12,
+                        marginBottom: 8,
+                        padding: '10px',
+                        background: '#f9fafb',
+                        transition: '0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#f9fafb'}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        <img 
+                          src={getAvatar(friend.fullName || friend.username, friend.avatar)} 
+                          style={{width:48, height:48, borderRadius:'50%'}} 
+                          alt="" 
+                        />
+                        <div style={{ 
+                          position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
+                          background: '#22c55e', 
+                          border: '2px solid white' 
+                        }}></div>
+                      </div>
+                      <div className="conv-info">
+                        <h4>{friend.fullName || friend.username || "Người dùng"}</h4>
+                        <p style={{ fontSize: 12, color: '#6b7280' }}>Bạn bè</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Hiển thị danh sách conversations (filtered) */}
+              {conversations
+                .filter(conv => {
+                  if (!conversationSearch.trim()) return true;
+                  const searchLower = conversationSearch.toLowerCase();
+                  const title = (conv.title || "").toLowerCase();
+                  return title.includes(searchLower);
+                })
+                .map(conv => (
                 <div 
                   key={conv.id} 
                   className={`conv-item ${currentChat?.id === conv.id ? 'active' : ''}`}
@@ -431,14 +627,76 @@ const Home = () => {
             <div className="messages-area">
               {messages.map((msg, idx) => {
                 const isMe = msg.senderId === user.id;
+                const senderName = msg.sender?.fullName || msg.sender?.username || "Người dùng";
+                const senderAvatar = msg.sender?.avatar;
+                const senderIsOnline = msg.sender?.isOnline || false;
+                
                 return (
-                  <div key={idx} className={`msg-row ${isMe ? 'me' : 'other'}`}>
+                  <div key={msg.id || idx} className={`msg-row ${isMe ? 'me' : 'other'}`} style={{ marginBottom: '12px' }}>
                     {!isMe && (
-                        <div style={{ position: 'relative', alignSelf: 'flex-end' }}>
-                             <img src={getAvatar(currentChat.title, currentChat.avatar)} style={{width:30, height:30, borderRadius:'50%'}} alt="" />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <div style={{ position: 'relative' }}>
+                            <img 
+                              src={getAvatar(senderName, senderAvatar)} 
+                              style={{width:32, height:32, borderRadius:'50%', objectFit: 'cover'}} 
+                              alt={senderName}
+                            />
+                            <div style={{ 
+                              position: 'absolute', 
+                              bottom: 0, 
+                              right: 0, 
+                              width: 10, 
+                              height: 10, 
+                              borderRadius: '50%', 
+                              background: senderIsOnline ? '#22c55e' : '#94a3b8', 
+                              border: '2px solid white' 
+                            }}></div>
+                          </div>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                            {senderName}
+                          </span>
+                          <span style={{ fontSize: '11px', color: senderIsOnline ? '#22c55e' : '#9ca3af' }}>
+                            {senderIsOnline ? '● Online' : '● Offline'}
+                          </span>
                         </div>
+                        <div className="msg-bubble" style={{ marginLeft: '40px' }}>
+                          {msg.content}
+                        </div>
+                      </div>
                     )}
-                    <div className="msg-bubble">{msg.content}</div>
+                    {isMe && (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                            {user.isOnline ? '● Online' : '● Offline'}
+                          </span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                            {user.fullName || user.username || "Bạn"}
+                          </span>
+                          <div style={{ position: 'relative' }}>
+                            <img 
+                              src={getAvatar(user.fullName || user.username, user.avatar)} 
+                              style={{width:32, height:32, borderRadius:'50%', objectFit: 'cover'}} 
+                              alt="Bạn"
+                            />
+                            <div style={{ 
+                              position: 'absolute', 
+                              bottom: 0, 
+                              right: 0, 
+                              width: 10, 
+                              height: 10, 
+                              borderRadius: '50%', 
+                              background: user.isOnline ? '#22c55e' : '#94a3b8', 
+                              border: '2px solid white' 
+                            }}></div>
+                          </div>
+                        </div>
+                        <div className="msg-bubble" style={{ marginRight: '40px' }}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
