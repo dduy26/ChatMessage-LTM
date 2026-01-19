@@ -5,6 +5,8 @@ const authMiddleware = require("../middlewares/auth.middleware");
 
 // Tạo cuộc hội thoại mới
 router.post("/", authMiddleware, ConversationController.create); 
+// Tạo cuộc trò chuyện nhóm
+router.post("/group", authMiddleware, ConversationController.createGroup);
 
 // Lấy danh sách tất cả hội thoại của User
 router.get("/", authMiddleware, ConversationController.getAll); 

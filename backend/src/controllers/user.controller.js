@@ -111,7 +111,10 @@ class UserController {
             const { password, ...safeData } = updatedUser;
             res.status(200).json({ 
                 message: "Cập nhật hồ sơ thành công", 
-                user: safeData 
+                user: {
+                    ...safeData,
+                    avatar: updatedUser.avatar || existingUser.avatar // Giữ nguyên avatar nếu không cập nhật
+                }
             });
         } catch (error) {
             console.error("Lỗi updateProfile:", error);

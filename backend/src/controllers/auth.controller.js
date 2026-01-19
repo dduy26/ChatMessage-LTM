@@ -166,7 +166,8 @@ class AuthController {
                     id: newUser.id, 
                     email: newUser.email, 
                     fullName: newUser.fullName,
-                    role: newUser.role
+                    role: newUser.role,
+                    avatar: newUser.avatar // Thêm avatar vào response
                 }
             });
 
@@ -237,7 +238,8 @@ class AuthController {
                     id: user.id,
                     email: user.email,
                     fullName: user.fullName,
-                    role: user.role
+                    role: user.role,
+                    avatar: user.avatar // Thêm avatar vào response
                 }
             });
 
@@ -452,6 +454,7 @@ class AuthController {
             return res.status(400).send("<h1>Xác minh thất bại</h1><p>Link đã hết hạn hoặc không hợp lệ.</p>");
         }
     }
+    
 }
 
 module.exports = AuthController;

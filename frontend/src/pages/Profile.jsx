@@ -102,9 +102,15 @@ const Profile = () => {
             setSuccessMsg(res.data.message || "Cập nhật hồ sơ thành công!");
             
             if (res.data.user) {
-                setFormData(prev => ({ ...prev, ...res.data.user }));
                 const localUser = JSON.parse(localStorage.getItem("user") || "{}");
-                localStorage.setItem("user", JSON.stringify({ ...localUser, ...res.data.user }));
+                // Giữ nguyên avatar nếu không có trong response hoặc nếu avatar hiện tại đã có
+                const updatedUser = {
+                    ...localUser,
+                    ...res.data.user,
+                    avatar: res.data.user.avatar || localUser.avatar || formData.avatar
+                };
+                setFormData(prev => ({ ...prev, ...updatedUser }));
+                localStorage.setItem("user", JSON.stringify(updatedUser));
             }
         } catch (err) {
             setErrorMsg(err.response?.data?.error || "Cập nhật thông tin thất bại");

@@ -24,6 +24,11 @@ const Home = () => {
   const [foundUser, setFoundUser] = useState(null);
   const [friends, setFriends] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  // Group chat state
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState(new Set());
+  const [creatingGroup, setCreatingGroup] = useState(false);
   
   // State cho tìm kiếm bạn bè trong conversation
   const [conversationSearch, setConversationSearch] = useState("");
@@ -171,8 +176,9 @@ const Home = () => {
     } catch {
         console.warn("API logout failed, clearing local data anyway...");
     } finally {
-        // 3. LUÔN LUÔN xóa sạch local storage
-        localStorage.clear();
+        // 3. Xóa token và user data (avatar sẽ được load lại từ backend khi login)
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("user");
         navigate("/login");
     }
 };
@@ -270,6 +276,66 @@ const Home = () => {
       alert("Đã từ chối lời mời");
       fetchPendingRequests(); // Load lại danh sách lời mời
     } catch { alert("Lỗi khi từ chối"); }
+  };
+
+  // Group chat helpers
+  const toggleGroupModal = () => {
+    setShowGroupModal(!showGroupModal);
+  };
+
+  const handleToggleMember = (id) => {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) {
+      alert("Vui lòng nhập tên nhóm");
+      return;
+    }
+    if (selectedMembers.size === 0) {
+      alert("Vui lòng chọn ít nhất một thành viên");
+      return;
+    }
+
+    setCreatingGroup(true);
+    try {
+      const memberIds = Array.from(selectedMembers);
+      const res = await api.post("/conversations/group", {
+        title: groupName.trim(),
+        memberIds
+      });
+
+      const newConv = {
+        id: res.data.id,
+        type: res.data.type,
+        title: res.data.title || "Nhóm",
+        avatar: null,
+        participantId: null,
+        isOnline: false,
+        participants: res.data.participants?.map(p => ({
+          id: p.user.id,
+          username: p.user.username,
+          fullName: p.user.fullName,
+          avatar: p.user.avatar,
+          isOnline: p.user.isOnline
+        })) || []
+      };
+
+      setConversations(prev => [newConv, ...prev]);
+      setCurrentChat(newConv);
+      setShowGroupModal(false);
+      setGroupName("");
+      setSelectedMembers(new Set());
+    } catch (err) {
+      alert(err.response?.data?.error || "Không thể tạo nhóm");
+    } finally {
+      setCreatingGroup(false);
+    }
   };
 
   // Tìm hoặc tạo conversation với bạn bè
@@ -387,7 +453,6 @@ const Home = () => {
               <Users size={24} />
             </div>
 
-            <div className="sidebar-icon"><Phone size={24} /></div>
             <div className="sidebar-icon"><Settings size={24} /></div>
         </div>
 
@@ -407,12 +472,111 @@ const Home = () => {
         </div>
       </div>
 
+      {/* Modal tạo nhóm */}
+      {showGroupModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50
+        }}
+          onClick={(e) => { if (e.target === e.currentTarget) toggleGroupModal(); }}
+        >
+          <div style={{
+            background: '#fff',
+            borderRadius: 16,
+            width: 420,
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Tạo nhóm mới</h3>
+              <button onClick={toggleGroupModal} style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:18 }}>×</button>
+            </div>
+            <div style={{ padding: '16px 20px', display:'flex', flexDirection:'column', gap:12, overflowY:'auto' }}>
+              <div>
+                <label style={{ fontWeight: 600, fontSize: 14 }}>Tên nhóm</label>
+                <input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Nhập tên nhóm..."
+                  style={{
+                    width:'100%',
+                    marginTop:6,
+                    padding:'10px 12px',
+                    border:'1px solid #e5e7eb',
+                    borderRadius:10
+                  }}
+                />
+              </div>
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <label style={{ fontWeight: 600, fontSize: 14 }}>Chọn thành viên</label>
+                  {selectedMembers.size > 0 && (
+                    <span style={{ fontSize: 13, color: '#7360f2', fontWeight: 600 }}>
+                      Đã chọn: {selectedMembers.size} thành viên
+                    </span>
+                  )}
+                </div>
+                <div style={{ marginTop:8, maxHeight: 260, overflowY:'auto', border:'1px solid #e5e7eb', borderRadius:10, padding:10 }}>
+                  {friends.length === 0 ? (
+                    <p style={{ color:'#9ca3af', fontSize:13 }}>Bạn chưa có bạn bè để thêm.</p>
+                  ) : friends.map(f => (
+                    <label key={f.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 6px', cursor:'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.has(f.id)}
+                        onChange={() => handleToggleMember(f.id)}
+                      />
+                      <img
+                        src={getAvatar(f.fullName || f.username, f.avatar)}
+                        alt={f.fullName || f.username}
+                        style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}
+                      />
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, fontSize:14 }}>{f.fullName || f.username || "Người dùng"}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ padding:'12px 20px', borderTop:'1px solid #e5e7eb', display:'flex', justifyContent:'flex-end', gap:10 }}>
+              <button onClick={toggleGroupModal} style={{ padding:'10px 14px', border:'1px solid #e5e7eb', borderRadius:10, background:'#fff', cursor:'pointer' }}>
+                Hủy
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={creatingGroup}
+                style={{
+                  padding:'10px 14px',
+                  border:'none',
+                  borderRadius:10,
+                  background:'#7360f2',
+                  color:'#fff',
+                  cursor: creatingGroup ? 'not-allowed' : 'pointer',
+                  opacity: creatingGroup ? 0.7 : 1
+                }}
+              >
+                {creatingGroup ? "Đang tạo..." : "Tạo nhóm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- CỘT 2: DANH SÁCH CHAT / BẠN BÈ --- */}
       <div className="chat-list">
         {activeTab === 'chat' ? (
           <>
-            <div className="search-bar">
-                <div style={{display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:20, padding:'0 15px'}}>
+            <div className="search-bar" style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:20, padding:'0 15px', flex:1}}>
                   <Search size={16} color="#888" />
                   <input 
                     className="search-input" 
@@ -421,6 +585,24 @@ const Home = () => {
                     onChange={(e) => setConversationSearch(e.target.value)}
                   />
                 </div>
+                <button 
+                  onClick={toggleGroupModal}
+                  title="Tạo nhóm"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    border: 'none',
+                    background: '#7360f2',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Users size={18} />
+                </button>
             </div>
             
             <div style={{flex:1, overflowY:'auto'}}>
@@ -481,15 +663,40 @@ const Home = () => {
                 >
                   <div style={{ position: 'relative' }}>
                     <img src={getAvatar(conv.title, conv.avatar)} style={{width:48, height:48, borderRadius:'50%'}} alt="" />
-                    <div style={{ 
-                      position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
-                      background: conv.isOnline ? '#22c55e' : '#94a3b8', 
-                      border: '2px solid white' 
-                    }}></div>
+                    {/* Chỉ hiển thị trạng thái online/offline cho DIRECT chat, không hiển thị cho GROUP */}
+                    {conv.type === "DIRECT" && (
+                      <div style={{ 
+                        position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', 
+                        background: conv.isOnline ? '#22c55e' : '#94a3b8', 
+                        border: '2px solid white' 
+                      }}></div>
+                    )}
+                    {/* Hiển thị số lượng thành viên cho GROUP */}
+                    {conv.type === "GROUP" && conv.participants && (
+                      <div style={{ 
+                        position: 'absolute', bottom: 2, right: 2, width: 20, height: 20, borderRadius: '50%', 
+                        background: '#7360f2', 
+                        border: '2px solid white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        color: 'white'
+                      }}>
+                        {conv.participants.length}
+                      </div>
+                    )}
                   </div>
                   <div className="conv-info">
                       <h4>{conv.title || "User"}</h4>
-                      <p>{conv.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}</p>
+                      {conv.type === "GROUP" ? (
+                        <p style={{ fontSize: 12, color: '#6b7280' }}>
+                          {conv.participants?.length || 0} thành viên
+                        </p>
+                      ) : (
+                        <p>{conv.isOnline ? "Đang hoạt động" : "Ngoại tuyến"}</p>
+                      )}
                   </div>
                 </div>
               ))}
