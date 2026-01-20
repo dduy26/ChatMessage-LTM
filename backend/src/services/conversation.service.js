@@ -19,29 +19,130 @@ class ConversationService {
                     include: { user: { select: { id: true, username: true, fullName: true, avatar: true } } }
                 }
             }
+        
+        });
+    }
+    static async createGroup({ title, memberIds, ownerId }) {
+        // Tạo cuộc trò chuyện nhóm
+        const conversation = await prisma.conversation.create({
+            data: {
+                type: "GROUP",
+                title: title || "Nhóm mới"
+            }
         });
 
-        // Nếu đã có -> Trả về luôn
-        if (existingConversation) {
-            return existingConversation;
-        }
+        // Thêm owner và các thành viên được chọn vào nhóm
+        const participantIds = Array.from(new Set([ownerId, ...memberIds]));
 
-        // Nếu chưa -> Tạo mới
-        return await prisma.conversation.create({
-            data: {
-                // Tạo Conversation và tạo luôn 2 dòng Participants
+        await prisma.participant.createMany({
+            data: participantIds.map(id => ({
+                userId: Number(id),
+                conversationId: conversation.id,
+                role: id === ownerId ? "ADMIN" : "MEMBER"
+            }))
+        });
+
+        // Lấy lại conversation kèm participants để trả về cho FE
+        const fullConversation = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            include: {
                 participants: {
-                    create: [
-                        { userId: senderId },
-                        { userId: receiverId }
-                    ]
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                username: true,
+                                fullName: true,
+                                avatar: true,
+                                isOnline: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return fullConversation;
+    }
+
+    static getAll(userId) {
+        return prisma.conversation.findMany({
+            where: {
+                participants: {
+                    some: {
+                        userId: userId
+                    }
                 }
             },
             include: {
                 participants: {
-                    include: { user: { select: { id: true, username: true, fullName: true, avatar: true } } }
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                username: true,
+                                fullName: true,
+                                avatar: true,
+                                isOnline: true
+                            }
+                        }
+                    }
+                },
+                messages: {
+                    take: 1,
+                    orderBy: { createdAt: "desc" },
+                    include: {
+                        sender: {
+                            select: {
+                                id: true,
+                                username: true,
+                                fullName: true,
+                                avatar: true,
+                                isOnline: true
+                            }
+                        }
+                    }
                 }
-            }
+            },
+            orderBy: { createdAt: "desc" },
+        }).then(conversations => {
+            // Transform conversations để dễ sử dụng ở frontend
+            return conversations.map(conv => {
+                if (conv.type === "GROUP") {
+                    return {
+                        id: conv.id,
+                        type: conv.type,
+                        title: conv.title || "Nhóm",
+                        avatar: null,
+                        participantId: null,
+                        isOnline: false,
+                        participants: conv.participants.map(p => ({
+                            id: p.user.id,
+                            username: p.user.username,
+                            fullName: p.user.fullName,
+                            avatar: p.user.avatar,
+                            isOnline: p.user.isOnline
+                        })),
+                        createdAt: conv.createdAt,
+                        lastMessage: conv.messages[0] || null
+                    };
+                }
+
+                // DIRECT conversation
+                const otherParticipant = conv.participants.find(p => p.userId !== userId);
+                const otherUser = otherParticipant?.user;
+                
+                return {
+                    id: conv.id,
+                    type: conv.type,
+                    title: conv.title || otherUser?.fullName || otherUser?.username || "Người dùng",
+                    avatar: otherUser?.avatar,
+                    participantId: otherUser?.id,
+                    isOnline: otherUser?.isOnline || false,
+                    createdAt: conv.createdAt,
+                    lastMessage: conv.messages[0] || null
+                };
+            });
         });
     }
 

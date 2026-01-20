@@ -4,9 +4,21 @@ const prisma = require("../config/prisma");
 const authMiddleware = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
-        const token = authHeader && authHeader.split(' ')[1];
+        
+        if (!authHeader) {
+            console.log(" Không có Authorization header");
+            return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này!" });
+        }
+
+        if (!authHeader.startsWith('Bearer ')) {
+            console.log(" Authorization header không đúng format (thiếu 'Bearer ')");
+            return res.status(401).json({ error: "Token không hợp lệ!" });
+        }
+
+        const token = authHeader.split(' ')[1];
 
         if (!token) {
+            console.log(" Không có token sau 'Bearer '");
             return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này!" });
         }
 
@@ -14,40 +26,28 @@ const authMiddleware = async (req, res, next) => {
             where: { token: token }
         });
 
-        console.log("Token gửi lên:", token);
-        console.log("Tìm thấy trong Blacklist?:", isBlacklisted ? "CÓ" : "KHÔNG");
-
         if (isBlacklisted) {
+            console.log(" Token đã bị blacklist");
             return res.status(401).json({ error: "Token đã bị vô hiệu hóa!" });
         }
 
         const decoded = JWT.verify(token, process.env.JWT_SECRET);
-        
-        // Đảm bảo decoded có userId
-        if (!decoded || (!decoded.userId && !decoded.id)) {
-            console.error(" Token không chứa userId hoặc id:", decoded);
-            return res.status(401).json({ error: "Token không hợp lệ: thiếu thông tin người dùng" });
-        }
-
-        console.log("=== DEBUG MIDDLEWARE ===");
-        console.log("Token giải mã thành công!:", JSON.stringify(decoded, null, 2));
-        console.log("decoded.userId:", decoded.userId, "(type:", typeof decoded.userId, ")");
-        console.log("decoded.id:", decoded.id, "(type:", typeof decoded.id, ")");
-        console.log("decoded keys:", Object.keys(decoded));
-        
-        // Đảm bảo userId là số nếu có
-        if (decoded.userId !== undefined && decoded.userId !== null) {
-            const userIdNum = Number(decoded.userId);
-            if (!isNaN(userIdNum) && Number.isInteger(userIdNum) && userIdNum > 0) {
-                decoded.userId = userIdNum; // Đảm bảo là số
-            }
-        }
-        
         req.user = decoded;
+        // Đảm bảo tương thích với cả req.user.id và req.user.userId
+        if (decoded.userId && !decoded.id) {
+            req.user.id = decoded.userId;
+        }
         
+        console.log("✅ Token hợp lệ cho user ID:", decoded.userId);
         next();
     } catch (error) {
-        console.error("Lỗi trong authMiddleware:", error);
+        console.error(" Lỗi xác thực token:", error.message);
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ error: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!" });
+        }
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: "Token không hợp lệ!" });
+        }
         return res.status(403).json({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn!" });
     }
 };

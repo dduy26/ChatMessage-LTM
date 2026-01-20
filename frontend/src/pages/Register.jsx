@@ -22,7 +22,7 @@ const Register = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Xử lý Đăng ký
+    // Xử lý Đăng ký
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -35,15 +35,19 @@ const Register = () => {
       // 2. Log ra để kiểm tra nếu cần 
       console.log("Dữ liệu từ Server:", response.data);
 
-      // 3. Sử dụng thông báo từ Server nếu Backend có trả về field 'message'
+      // 3. Sử dụng thông báo từ Server
       const successMsg = response.data?.message || "Đăng ký tài khoản thành công!";
       alert(successMsg);
 
-      // 4. Chuyển hướng
+      // 4. Chuyển hướng về trang đăng nhập để user đăng nhập lại
       navigate("/login"); 
     } catch (err) {
       // Xử lý lỗi từ Server 
-      setError(err.response?.data?.message || "Đăng ký thất bại");
+      const serverMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Đăng ký thất bại";
+      setError(serverMsg);
     } finally {
       setLoading(false);
     }

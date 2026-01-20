@@ -4,24 +4,17 @@ class MessageService {
     static async create(data) {
         return await prisma.message.create({
             data,
-            include: {
-                attachments: true,
-
-                // Lấy thêm thông tin người gửi (để Frontend hiển thị Avatar/Tên ngay lập tức)
-                sender: {
-                    select: { id: true, username: true, fullName: true, avatar: true }
-                },
-
-                // Lấy Conversation kèm Participants
-                conversation: {
-                    include: {
-                        participants: {
-                            include: {
-                                user: { select: { id: true, username: true } }
-                            }
-                        }
-                    }
-                }
+            include: { 
+                attachments: true, // Trả về kèm file đính kèm sau khi tạo
+                sender: { 
+                    select: { 
+                        id: true, 
+                        fullName: true, 
+                        username: true, 
+                        avatar: true,
+                        isOnline: true 
+                    } 
+                } // Lấy thông tin người gửi bao gồm avatar và trạng thái online
             }
         });
     }
@@ -42,7 +35,15 @@ class MessageService {
             where: whereClause,
             include: { 
                 attachments: true, // Lấy kèm file đính kèm
-                sender: { select: { id: true, fullName: true, username: true, avatar: true } } // Lấy thông tin người gửi
+                sender: { 
+                    select: { 
+                        id: true, 
+                        fullName: true, 
+                        username: true, 
+                        avatar: true,
+                        isOnline: true 
+                    } 
+                } // Lấy thông tin người gửi bao gồm avatar và trạng thái online
             },
             orderBy: { createdAt: "asc" },
         });

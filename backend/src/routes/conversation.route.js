@@ -1,23 +1,24 @@
 const router = require("express").Router();
 const ConversationController = require("../controllers/conversation.controller");
+const MessageController = require("../controllers/message.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 
-// --- QUAN TRỌNG: Kích hoạt Middleware ---
-// Dòng này phải nằm TRÊN các route bên dưới.
-// Nó đảm bảo req.user luôn tồn tại trước khi vào Controller.
-router.use(authMiddleware); 
+// Tạo cuộc hội thoại mới
+router.post("/", authMiddleware, ConversationController.create); 
+// Tạo cuộc trò chuyện nhóm
+router.post("/group", authMiddleware, ConversationController.createGroup);
 
-// --- Định nghĩa Route Conversation ---
+// Lấy danh sách tất cả hội thoại của User
+router.get("/", authMiddleware, ConversationController.getAll); 
 
-// 1. Tạo hội thoại mới (POST /api/conversations)
-router.post("/", ConversationController.create);
+// Gửi tin nhắn vào hội thoại
+router.post("/:conversationId/messages", authMiddleware, MessageController.create); 
 
-// 2. Lấy danh sách hội thoại của mình (GET /api/conversations)
-router.get("/", ConversationController.getAll);
+// Lấy danh sách tin nhắn của hội thoại
+router.get("/:conversationId/messages", authMiddleware, MessageController.getByConversation); 
 
-// 3. Lấy chi tiết, Sửa, Xóa
-router.get("/:id", ConversationController.getById);
-router.put("/:id", ConversationController.update);
-router.delete("/:id", ConversationController.remove);
+router.get("/:id", authMiddleware, ConversationController.getById); 
+router.put("/:id", authMiddleware, ConversationController.update);
+router.delete("/:id", authMiddleware, ConversationController.remove);
 
 module.exports = router;

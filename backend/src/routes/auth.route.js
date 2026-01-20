@@ -14,7 +14,11 @@ router.post('/login', AuthController.login);
 
 router.post('/forgot-password', AuthController.forgotPassword);
 router.post('/reset-password', AuthController.resetPassword);
+
+router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', authMiddleware, AuthController.logout);
-router.get('/debug-token', AuthController.debugToken); // Endpoint để debug token
+router.post('/request-verification', authMiddleware, AuthController.requestVerification);
+router.get('/verify-email', AuthController.verifyEmail);
+
 
 module.exports = router;
