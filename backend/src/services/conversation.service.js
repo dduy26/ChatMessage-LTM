@@ -4,7 +4,7 @@ class ConversationService {
     
     // 1. Logic tạo hội thoại thông minh
     // Kiểm tra nếu đã có chat 1-1 rồi thì trả về cái cũ, chưa có mới tạo cái mới
-static async create(senderId, receiverId) {
+    static async create(senderId, receiverId) {
     // 1. Tìm hội thoại 1-1 đã tồn tại giữa 2 người
     const existingConversation = await prisma.conversation.findFirst({
         where: {
@@ -50,6 +50,11 @@ static async create(senderId, receiverId) {
         });
     });
 }
+
+    // Alias method để tương thích với controller
+    static async createDirect(senderId, receiverId) {
+        return this.create(senderId, receiverId);
+    }
     static async createGroup({ title, memberIds, ownerId }) {
         // Tạo cuộc trò chuyện nhóm
         const conversation = await prisma.conversation.create({
@@ -193,7 +198,7 @@ static async create(senderId, receiverId) {
                     orderBy: { createdAt: 'desc' }
                 }
             },
-            orderBy: { updatedAt: 'desc' } // Chat nào mới nhất lên đầu
+            orderBy: { createdAt: 'desc' } // Chat nào mới nhất lên đầu
         });
     }
 

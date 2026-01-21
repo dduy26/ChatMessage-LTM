@@ -4,11 +4,11 @@ class MessageController {
     static async create(req, res) {
         try {
             const conversationId = Number(req.params.conversationId);
-            const { content } = req.body;
+            // Với multer, content sẽ được parse từ req.body
+            const content = req.body.content || "";
             const files = req.files || []; // lấy danh sách file đính kèm ở middleware nếu có
 
             let senderId = req.user ? req.user.userId : req.body.senderId;
-
 
             senderId = Number(senderId);
 
@@ -17,12 +17,56 @@ class MessageController {
                     error: "Thiếu ID người gửi (senderId). Vui lòng đăng nhập hoặc gửi kèm senderId trong body." 
                 });
             }
-            // truyền object dữ liệu và mảng files vào Service
+
+            // Log để debug
+            console.log(`[Message] User ${senderId} gửi tin nhắn đến conversation ${conversationId}`);
+            console.log(`[Message] Content: "${content}"`);
+            console.log(`[Message] Files: ${files.length} file(s)`);
+            
+            // Log chi tiết file object để debug
+            if (files.length > 0) {
+                console.log(`[Message] File object structure:`, JSON.stringify(files[0], null, 2));
+            }
+
+            // Xử lý files từ Cloudinary: chuyển đổi sang format attachments
+            // CloudinaryStorage trả về: path (URL), filename (public_id), originalname, mimetype, size
+            const attachments = files.map((file, index) => {
+                try {
+                    // Cloudinary trả về URL trong file.path hoặc file.url
+                    const fileUrl = file.path || file.url || file.secure_url;
+                    // public_id từ filename
+                    const publicId = file.filename || file.public_id;
+                    // Tên file gốc
+                    const fileName = file.originalname || file.filename || `file-${index}`;
+                    // MIME type
+                    const fileType = file.mimetype || file.resource_type || 'application/octet-stream';
+                    // Kích thước file
+                    const fileSize = file.size || file.bytes || null;
+
+                    if (!fileUrl) {
+                        throw new Error(`File ${index} không có URL: ${JSON.stringify(file)}`);
+                    }
+
+                    return {
+                        fileUrl: fileUrl,
+                        publicId: publicId,
+                        fileName: fileName,
+                        fileType: fileType,
+                        fileSize: fileSize
+                    };
+                } catch (fileError) {
+                    console.error(`[Message] Lỗi xử lý file ${index}:`, fileError);
+                    throw new Error(`Lỗi xử lý file ${index}: ${fileError.message}`);
+                }
+            });
+
+            // truyền object dữ liệu và mảng attachments vào Service
             const msg = await MessageService.create({
-                content: content || "",
+                content: content.trim() || "", // Trim và đảm bảo không null
                 senderId: senderId,
                 conversationId,
-            },files);
+                attachments: attachments // Truyền attachments vào data
+            });
 
             const io = req.app.get("io");
 
@@ -38,7 +82,13 @@ class MessageController {
             res.status(201).json(msg);
         } catch (err) {
             console.error("Lỗi Controller create:", err);
-            res.status(400).json({ error: err.message });
+            console.error("Error stack:", err.stack);
+            // Trả về 500 cho lỗi server, 400 cho lỗi validation
+            const statusCode = err.message.includes('validation') || err.message.includes('Thiếu') ? 400 : 500;
+            res.status(statusCode).json({ 
+                error: err.message || "Lỗi khi tạo tin nhắn",
+                details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            });
         }
     }
 
@@ -79,6 +129,24 @@ class MessageController {
             await MessageService.delete(id);
             res.json({ message: "Đã xóa tin nhắn!" });
         } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
+    }
+
+    // Xóa tất cả lịch sử trò chuyện trong một conversation
+    static async deleteConversationHistory(req, res) {
+        try {
+            const conversationId = Number(req.params.conversationId);
+            const userId = req.user?.userId || req.user?.id;
+
+            if (!userId) {
+                return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này" });
+            }
+
+            const result = await MessageService.deleteAllByConversation(conversationId, userId);
+            res.json(result);
+        } catch (err) {
+            console.error("Lỗi xóa lịch sử trò chuyện:", err);
             res.status(400).json({ error: err.message });
         }
     }

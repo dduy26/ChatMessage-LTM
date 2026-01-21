@@ -1,5 +1,8 @@
 const prisma = require("../config/prisma");
 
+// Map để lưu trữ socket connections theo userId
+const userSockets = new Map();
+
 module.exports = (io) => {
     io.on("connection", async (socket) => {
         try {
@@ -13,6 +16,12 @@ module.exports = (io) => {
 
             socket.userId = userId;
             console.log(`Socket Connected: ${socket.id} (User ID: ${userId})`);
+
+            // Lưu socket vào map theo userId (một user có thể có nhiều socket nếu mở nhiều tab)
+            if (!userSockets.has(userId)) {
+                userSockets.set(userId, []);
+            }
+            userSockets.get(userId).push(socket);
 
             // Cập nhật isOnline
             await prisma.user.update({
@@ -48,23 +57,50 @@ module.exports = (io) => {
             if (socket.userId) {
                 console.log(` User Disconnected: ${socket.userId}`);
                 try {
-                    // Cập nhật isOnline: false và lưu lastSeen
-                    await prisma.user.update({
-                        where: { id: socket.userId },
-                        data: { 
-                            isOnline: false, 
-                            lastSeen: new Date() 
+                    // Xóa socket khỏi map
+                    const userSocketList = userSockets.get(socket.userId);
+                    if (userSocketList) {
+                        const index = userSocketList.indexOf(socket);
+                        if (index > -1) {
+                            userSocketList.splice(index, 1);
                         }
-                    });
-                    
-                    socket.broadcast.emit('user_status_change', { 
-                        userId: socket.userId, 
-                        isOnline: false 
-                    });
+                        // Nếu không còn socket nào, xóa key khỏi map
+                        if (userSocketList.length === 0) {
+                            userSockets.delete(socket.userId);
+                        }
+                    }
+
+                    // Cập nhật isOnline: false và lưu lastSeen (chỉ khi không còn socket nào)
+                    if (!userSockets.has(socket.userId)) {
+                        await prisma.user.update({
+                            where: { id: socket.userId },
+                            data: { 
+                                isOnline: false, 
+                                lastSeen: new Date() 
+                            }
+                        });
+                        
+                        socket.broadcast.emit('user_status_change', { 
+                            userId: socket.userId, 
+                            isOnline: false 
+                        });
+                    }
                 } catch (error) {
                     console.error(" Error updating offline status:", error);
                 }
             }
         });
     });
+
+    // Export function để emit đến user cụ thể
+    io.emitToUser = (userId, event, data) => {
+        const sockets = userSockets.get(Number(userId));
+        if (sockets && sockets.length > 0) {
+            sockets.forEach(socket => {
+                socket.emit(event, data);
+            });
+        }
+    };
+
+    return io;
 };
