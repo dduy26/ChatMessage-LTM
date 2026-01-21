@@ -1,25 +1,16 @@
 const ConversationService = require("../services/conversation.service");
 
 class ConversationController {
-
-    // 1. TẠO HỘI THOẠI (Sửa để tự lấy ID người tạo từ Token)
-    static async create(req, res) {
+    static async createDirect(req, res) {
         try {
-            // Lấy ID mình từ Token (người gửi yêu cầu)
-            const senderId = req.user.userId;
-            // Lấy ID người muốn chat cùng từ Body
-            const { userId } = req.body; 
+            const senderId = req.user.userId; // Lấy từ authMiddleware
+            const { receiverId } = req.body;
 
-            if (!userId) {
-                return res.status(400).json({ error: "Thiếu userId người nhận (người muốn chat cùng)" });
-            }
+            if (!receiverId) return res.status(400).json({ error: "Missing receiverId" });
 
-            // Gọi Service chuẩn (Logic check trùng hoặc tạo mới)
-            const convo = await ConversationService.create(senderId, Number(userId));
-            
-            res.status(201).json(convo);
+            const conversation = await ConversationService.createDirect(senderId, receiverId);
+            res.status(201).json(conversation);
         } catch (err) {
-            console.error(err);
             res.status(500).json({ error: err.message });
         }
     }
@@ -51,16 +42,27 @@ class ConversationController {
     }
 
     // READ: ALL 
-    static async getAll(req,res) {
-        try {
-            const userId = req.user?.userId || req.user?.id;
-            const convos = await ConversationService.getAll(Number(userId));
-            res.json(convos);
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    } 
+        static async getAll(req, res) {
+            try {
+                // 1. Lấy ID thô từ middleware
+                const rawUserId = req.user?.userId || req.user?.id;
+                
+                // 2. Ép kiểu sang số
+                const userId = Number(rawUserId);
 
+                // 3. Kiểm tra tính hợp lệ của ID
+                if (!userId || isNaN(userId)) {
+                    return res.status(401).json({ error: "Xác thực người dùng thất bại hoặc ID không hợp lệ" });
+                }
+
+                // 4. Gọi Service với ID đã được làm sạch
+                const convos = await ConversationService.getAll(userId);
+                res.json(convos);
+            } catch (err) {
+                console.error("Lỗi Controller getAll:", err);
+                res.status(500).json({ error: err.message });
+            }
+        }
     // 3. LẤY CHI TIẾT 1 HỘI THOẠI
     static async getById(req, res) {
         try {

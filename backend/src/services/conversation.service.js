@@ -4,24 +4,52 @@ class ConversationService {
     
     // 1. Logic tạo hội thoại thông minh
     // Kiểm tra nếu đã có chat 1-1 rồi thì trả về cái cũ, chưa có mới tạo cái mới
-    static async create(senderId, receiverId) {
-        // Tìm hội thoại cũ giữa 2 người này
-        const existingConversation = await prisma.conversation.findFirst({
-            where: {
-                AND: [
-                    { participants: { some: { userId: senderId } } },
-                    { participants: { some: { userId: receiverId } } },
-                    { isGroup: false } // Chỉ check chat 1-1
-                ]
-            },
+static async create(senderId, receiverId) {
+    // 1. Tìm hội thoại 1-1 đã tồn tại giữa 2 người
+    const existingConversation = await prisma.conversation.findFirst({
+        where: {
+            type: "DIRECT",
+            AND: [
+                { participants: { some: { userId: Number(senderId) } } },
+                { participants: { some: { userId: Number(receiverId) } } }
+            ]
+        },
+        include: {
+            participants: {
+                include: { user: { select: { id: true, username: true, fullName: true, avatar: true, isOnline: true } } }
+            }
+        }
+    });
+
+    // 2. Nếu đã có rồi, trả về luôn cái cũ
+    if (existingConversation) return existingConversation;
+
+    // 3. Nếu chưa có, dùng Transaction để tạo mới hoàn toàn
+    return await prisma.$transaction(async (tx) => {
+        // Tạo cuộc hội thoại mới
+        const newConversation = await tx.conversation.create({
+            data: { type: "DIRECT" }
+        });
+
+        // Thêm đồng thời cả 2 người vào bảng Participant
+        await tx.participant.createMany({
+            data: [
+                { userId: Number(senderId), conversationId: newConversation.id, role: "MEMBER" },
+                { userId: Number(receiverId), conversationId: newConversation.id, role: "MEMBER" }
+            ]
+        });
+
+        // Trả về dữ liệu đầy đủ kèm thông tin User để FE hiển thị ngay
+        return await tx.conversation.findUnique({
+            where: { id: newConversation.id },
             include: {
                 participants: {
-                    include: { user: { select: { id: true, username: true, fullName: true, avatar: true } } }
+                    include: { user: { select: { id: true, username: true, fullName: true, avatar: true, isOnline: true } } }
                 }
             }
-        
         });
-    }
+    });
+}
     static async createGroup({ title, memberIds, ownerId }) {
         // Tạo cuộc trò chuyện nhóm
         const conversation = await prisma.conversation.create({

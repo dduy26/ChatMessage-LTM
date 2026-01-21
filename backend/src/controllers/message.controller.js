@@ -19,7 +19,7 @@ class MessageController {
             }
             // truyền object dữ liệu và mảng files vào Service
             const msg = await MessageService.create({
-                content,
+                content: content || "",
                 senderId: senderId,
                 conversationId,
             },files);
