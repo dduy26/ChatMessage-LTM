@@ -5,7 +5,7 @@ class MessageController {
         try {
             const conversationId = Number(req.params.conversationId);
             const { content } = req.body;
-
+            const files = req.files || []; // lấy danh sách file đính kèm ở middleware nếu có
 
             let senderId = req.user ? req.user.userId : req.body.senderId;
 
@@ -17,18 +17,22 @@ class MessageController {
                     error: "Thiếu ID người gửi (senderId). Vui lòng đăng nhập hoặc gửi kèm senderId trong body." 
                 });
             }
-
+            // truyền object dữ liệu và mảng files vào Service
             const msg = await MessageService.create({
                 content,
-                senderId: senderId, // Dùng biến senderId đã kiểm tra kỹ ở trên
+                senderId: senderId,
                 conversationId,
-            });
+            },files);
 
-            const io = req.app.get("io"); 
-            
+            const io = req.app.get("io");
+
             if (io) {
-                io.emit("new message", msg);
-                console.log(`⚡ Socket sent: [User ${senderId}] nhắn: "${content}"`);
+                // Gửi vào room riêng của cuộc hội thoại này
+                io.to(`conversation_${conversationId}`).emit("new message", msg);
+                
+                // Log có thêm thông tin về tệp đính kèm
+                const fileCount = msg.attachments ? msg.attachments.length : 0;
+                console.log(`Socket: [User ${senderId}] gửi ${fileCount} tệp vào phòng ${conversationId}`);
             }
 
             res.status(201).json(msg);

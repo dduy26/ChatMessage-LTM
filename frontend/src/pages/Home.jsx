@@ -35,76 +35,71 @@ const Home = () => {
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // 1. Kết nối Socket và lấy danh sách chat (Giữ nguyên của bạn)
-  useEffect(() => {
+  // file
+  const [selectedFiles, setSelectedFiles] = useState([]); // Lưu trữ file đã chọn
+  const fileInputRef = useRef(); // Ref để kích hoạt input file ẩn
+useEffect(() => {
+    // Khởi tạo kết nối
     socket.current = io("http://localhost:5000", {
-      query: { token: localStorage.getItem("accessToken") }
+      // Dùng auth thay vì query để khớp với middleware xác thực ở Backend
+      auth: { token: localStorage.getItem("accessToken") } 
     });
 
+    // --- LẮNG NGHE TRẠNG THÁI ONLINE (GIỮ NGUYÊN LOGIC CỦA BẠN) ---
     socket.current.on("user_status_change", (data) => {
-      console.log("User status changed:", data);
-      
-      // Cập nhật trạng thái trong conversations
       setConversations((prev) =>
-        prev.map((conv) => {
-          if (conv.participantId === data.userId) {
-            return { ...conv, isOnline: data.isOnline };
-          }
-          return conv;
-        })
+        prev.map((conv) => (conv.participantId === data.userId ? { ...conv, isOnline: data.isOnline } : conv))
       );
+      setCurrentChat((prev) => (prev && prev.participantId === data.userId ? { ...prev, isOnline: data.isOnline } : prev));
+      setMessages((prev) =>
+        prev.map((msg) => (msg.senderId === data.userId ? { ...msg, sender: { ...msg.sender, isOnline: data.isOnline } } : msg))
+      );
+      setFriends((prev) =>
+        prev.map((friend) => (friend.id === data.userId ? { ...friend, isOnline: data.isOnline } : friend))
+      );
+    });
 
-      // Cập nhật trạng thái trong currentChat
+    // --- THÊM MỚI: LẮNG NGHE TIN NHẮN REAL-TIME ---
+    socket.current.on("new message", (newMessageReceived) => {
+      // Chỉ cập nhật nếu tin nhắn thuộc về cuộc trò chuyện đang mở
       setCurrentChat((prev) => {
-        if (prev && prev.participantId === data.userId) {
-          return { ...prev, isOnline: data.isOnline };
+        if (prev && prev.id === newMessageReceived.conversationId) {
+          setMessages((prevMsgs) => [...prevMsgs, newMessageReceived]);
         }
         return prev;
       });
-
-      // Cập nhật trạng thái trong messages (cập nhật sender.isOnline)
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.senderId === data.userId && msg.sender) {
-            return {
-              ...msg,
-              sender: {
-                ...msg.sender,
-                isOnline: data.isOnline
-              }
-            };
-          }
-          return msg;
-        })
-      );
-
-      // Cập nhật trạng thái trong friends list
-      setFriends((prev) =>
-        prev.map((friend) => {
-          if (friend.id === data.userId) {
-            return { ...friend, isOnline: data.isOnline };
-          }
-          return friend;
-        })
-      );
     });
 
-    const fetchConversations = async () => {
+    // Fetch dữ liệu ban đầu
+    const initData = async () => {
       try {
         const res = await api.get("/conversations");
         setConversations(res.data);
+        fetchPendingRequests();
+        fetchFriends();
       } catch (err) { console.error(err); }
     };
-    fetchConversations();
-
-    // Lấy lời mời kết bạn khi vào trang
-    fetchPendingRequests();
-    // Lấy danh sách bạn bè khi vào trang
-    fetchFriends();
+    initData();
 
     return () => socket.current.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!currentChat || !socket.current) return;
+
+    // Tham gia vào phòng chat cụ thể (Nhóm hoặc Cá nhân)
+    socket.current.emit("join_conversation", currentChat.id);
+
+    // Fetch tin nhắn cũ của cuộc trò chuyện đó
+    const fetchMessages = async () => {
+      try {
+        const res = await api.get(`/messages/conversation/${currentChat.id}`);
+        setMessages(res.data);
+      } catch (err) { console.error(err); }
+    };
+    fetchMessages();
+  }, [currentChat]); // Chạy lại mỗi khi đổi người chat/đổi nhóm
+  
   // Logic lấy lời mời kết bạn (Pending)
   const fetchPendingRequests = async () => {
     try {
@@ -153,18 +148,29 @@ const Home = () => {
   }, [messages]);
 
   // 4. Gửi tin nhắn (Giữ nguyên)
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentChat) return;
-    try {
-      const res = await api.post(`/messages/${currentChat.id}`, {
-        content: newMessage,
-        senderId: user.id
-      });
-      setMessages([...messages, res.data]);
-      setNewMessage("");
-    } catch { alert("Lỗi gửi tin!"); }
-  };
+const handleSendMessage = async () => {
+    if ((!newMessage.trim() && selectedFiles.length === 0) || !currentChat) return;
 
+    try {
+        const formData = new FormData();
+        formData.append("content", newMessage);
+        // Gửi mảng file qua key 'files' khớp với Backend
+        selectedFiles.forEach(file => formData.append("files", file));
+
+        const res = await api.post(`/messages/${currentChat.id}`, formData, {
+            headers: { "Content-Type": "multipart/form-data" }
+        });
+
+        // Phát socket để người khác nhận được file ngay lập tức
+        socket.current.emit("send_message", res.data);
+
+        setMessages([...messages, res.data]);
+        setNewMessage("");
+        setSelectedFiles([]);
+    } catch (err) {
+        alert("Lỗi khi gửi tin nhắn!");
+    }
+};
   // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
     try {
@@ -267,6 +273,7 @@ const Home = () => {
       alert("Đã đồng ý kết bạn!");
       fetchPendingRequests(); // Load lại danh sách lời mời
       fetchFriends(); // Load lại danh sách bạn bè
+      fetchConversations();
     } catch { alert("Lỗi xác nhận"); }
   };
 
@@ -867,10 +874,20 @@ const Home = () => {
                             {senderIsOnline ? '● Online' : '● Offline'}
                           </span>
                         </div>
-                        <div className="msg-bubble" style={{ marginLeft: '40px' }}>
-                          {msg.content}
-                        </div>
+                      <div className="msg-bubble">
+                          {msg.content && <p>{msg.content}</p>}
+                          {/* Render ảnh từ attachments */}
+                          {msg.attachments?.map((file) => (
+                              <div key={file.id} style={{ marginTop: 8 }}>
+                                  {file.fileType.includes("image") ? (
+                                      <img src={file.fileUrl} style={{ maxWidth: '200px', borderRadius: 8 }} alt="attachment" />
+                                  ) : (
+                                      <a href={file.fileUrl} target="_blank" rel="noreferrer">📄 {file.fileName}</a>
+                                  )}
+                              </div>
+                          ))}
                       </div>
+                    </div>
                     )}
                     {isMe && (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
@@ -911,8 +928,16 @@ const Home = () => {
             </div>
 
             <div className="chat-input-area">
-               <Plus size={24} color="#888" style={{cursor:'pointer'}} />
-               <div style={{flex:1, background:'#f3f4f6', borderRadius:24, padding:'10px 15px', display:'flex', alignItems:'center'}}>
+              {/*input file ẩn*/}
+              <input 
+                type="file" 
+                multiple 
+                hidden 
+                ref={fileInputRef} 
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+              />
+              <Plus size={24} color="#888" style={{cursor:'pointer'}} />
+              <div style={{flex:1, background:'#f3f4f6', borderRadius:24, padding:'10px 15px', display:'flex', alignItems:'center'}}>
                   <input 
                     className="chat-input" 
                     placeholder="Nhập tin nhắn..." 

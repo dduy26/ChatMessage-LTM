@@ -1,11 +1,25 @@
 const prisma = require("../config/prisma");
 
 class MessageService {
-    static async create(data) {
-        return await prisma.message.create({
-            data,
+    static async create(data, files = []) {
+
+
+        // Tạo tin nhắn và các bản ghi attachment cùng lúc trong 1 transaction
+        const { content, senderId, conversationId, attachments } = data;
+
+            return await prisma.message.create({
+            data: {
+                // Sử dụng content || "" để tránh lỗi 'Argument content is missing' 
+                // nếu người dùng chỉ gửi ảnh mà không nhắn chữ
+                content: content || "", 
+                senderId: parseInt(senderId),
+                conversationId: parseInt(conversationId),
+                attachments: {
+                create: attachments || [] // Mảng các tệp đã upload lên Cloudinary
+                },
+            },
             include: { 
-                attachments: true, // Trả về kèm file đính kèm sau khi tạo
+                attachments: true, 
                 sender: { 
                     select: { 
                         id: true, 
@@ -14,7 +28,7 @@ class MessageService {
                         avatar: true,
                         isOnline: true 
                     } 
-                } // Lấy thông tin người gửi bao gồm avatar và trạng thái online
+                } 
             }
         });
     }

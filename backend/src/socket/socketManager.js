@@ -1,84 +1,66 @@
-const prisma = require("../config/prisma"); // Import Prisma để update trạng thái
+const prisma = require("../config/prisma");
 
 module.exports = (io) => {
     io.on("connection", async (socket) => {
-        
         try {
-            // Lấy userId từ token (đã được middleware xác thực bên server.js)
             const rawUserId = socket.user?.userId || socket.user?.id;
-            
-            if (!rawUserId) {
-                console.log(" Socket connected but no User ID found");
-                socket.disconnect();
-                return;
+            const userId = Number(rawUserId);
+
+            if (!userId || isNaN(userId)) {
+                console.log("Socket connected but no valid User ID found");
+                return socket.disconnect();
             }
 
-            const userId = Number(rawUserId);
-            socket.userId = userId; // Lưu userId vào session của socket để dùng khi disconnect
+            socket.userId = userId;
+            console.log(`Socket Connected: ${socket.id} (User ID: ${userId})`);
 
-            console.log(`✅ Socket Connected: ${socket.id} (User ID: ${userId})`);
-
-            // Cập nhật DB: User này đang ONLINE
+            // Cập nhật isOnline
             await prisma.user.update({
                 where: { id: userId },
-                data: { status: 'ONLINE' }
+                data: { isOnline: true }
             });
-            
-            // Báo cho mọi người biết User này vừa Online (để cập nhật list friend)
-            socket.broadcast.emit('user_online', userId);
+            socket.broadcast.emit('user_status_change', { userId, isOnline: true });
 
         } catch (error) {
-            console.error(" Connection Error:", error.message);
-            socket.disconnect();
-            return;
+            console.error("Connection Error:", error.message);
         }
 
-
-        // 1. Setup Room cá nhân
-        socket.on("setup", (userData) => {
-            if (userData?.id) {
-                socket.join(userData.id);
-                socket.emit("connected");
-            }
+        // 1. Tham gia vào Room
+        socket.on("join_conversation", (conversationId) => {
+            const roomName = `conversation_${conversationId}`;
+            socket.join(roomName);
+            console.log(`User ${socket.userId} joined Room: ${roomName}`);
         });
 
-        // 2. Tham gia vào Room Chat
-        socket.on("join chat", (room) => {
-            socket.join(room);
-            console.log(`User joined Chat Room: ${room}`);
+        // 2. Rời phòng chat
+        socket.on("leave_conversation", (conversationId) => {
+            socket.leave(`conversation_${conversationId}`);
         });
 
-        // 3. Xử lý tin nhắn mới
-        socket.on("new message", (newMessageRecieved) => {
-            var chat = newMessageRecieved.conversation;
-
-            if (!chat.participants) return console.log(" Chat participants not defined");
-
-            chat.participants.forEach((participant) => {
-                // Không gửi lại cho chính người gửi
-                if (participant.userId === newMessageRecieved.senderId) return;
-
-                // Gửi tin nhắn đến Room cá nhân của từng người nhận
-                socket.in(participant.userId).emit("message received", newMessageRecieved);
-            });
+        // 3. Lắng nghe tin nhắn mới từ phía client
+        socket.on("send_message", (newMessage) => {
+            const roomName = `conversation_${newMessage.conversationId}`;
+            // Gửi tin nhắn đến mọi người trong phòng trừ người gửi
+            socket.to(roomName).emit("new message", newMessage);
         });
 
-        // 4. Xử lý ngắt kết nối
         socket.on("disconnect", async () => {
-            console.log(`🔌 User Disconnected: ${socket.userId || 'Unknown'}`);
-            
             if (socket.userId) {
+                console.log(` User Disconnected: ${socket.userId}`);
                 try {
-                    // Cập nhật DB: User OFFLINE và lưu thời gian
+                    // Cập nhật isOnline: false và lưu lastSeen
                     await prisma.user.update({
                         where: { id: socket.userId },
                         data: { 
-                            status: 'OFFLINE',
+                            isOnline: false, 
                             lastSeen: new Date() 
                         }
                     });
-                    // Báo cho mọi người biết
-                    socket.broadcast.emit('user_offline', socket.userId);
+                    
+                    socket.broadcast.emit('user_status_change', { 
+                        userId: socket.userId, 
+                        isOnline: false 
+                    });
                 } catch (error) {
                     console.error(" Error updating offline status:", error);
                 }

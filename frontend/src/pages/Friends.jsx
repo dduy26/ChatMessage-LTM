@@ -58,6 +58,7 @@ const Friend = () => {
     if (!email.trim()) return alert("Vui lòng nhập email");
     try {
       await api.post("/friendships/send-request", { email });
+      socket.current.emit("send_friend_request", { toUserId: foundUser.id });
       alert("Đã gửi lời mời kết bạn!");
       setEmail("");
       setFoundUser(null);
@@ -69,6 +70,7 @@ const Friend = () => {
   const handleAccept = async (requestId) => {
     try {
       await api.put(`/friendships/accept/${requestId}`);
+      socket.current.emit("accept_friend_request", { toUserId: friendId });
       alert("Đã trở thành bạn bè!");
       loadRequests(); // Refresh danh sách
     } catch {

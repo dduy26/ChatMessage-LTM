@@ -66,31 +66,54 @@ class FriendshipService {
         });
     }
 
-    static async acceptRequest(friendshipId, userId){
-        // Kiểm tra friendship có tồn tại không
+static async acceptRequest(friendshipId, userId) {
+        // 1. Kiểm tra lời mời có tồn tại không
         const friendship = await prisma.friendship.findUnique({
             where: { id: friendshipId }
         });
 
-        if (!friendship) {
-            throw new Error("Không tìm thấy lời mời kết bạn");
-        }
+        if (!friendship) throw new Error("Không tìm thấy lời mời kết bạn");
+        if (friendship.addresseeId !== userId) throw new Error("Bạn không có quyền chấp nhận");
+        if (friendship.status !== "PENDING") throw new Error("Lời mời đã được xử lý");
 
-        // Kiểm tra user có phải là người nhận không (chỉ người nhận mới được chấp nhận)
-        if (friendship.addresseeId !== userId) {
-            throw new Error("Bạn không có quyền chấp nhận lời mời kết bạn này");
-        }
+        // 2. Chạy Transaction để tạo đồng thời Friendship và Conversation
+        return prisma.$transaction(async (tx) => {
+            // Cập nhật trạng thái kết bạn
+            const updatedFriendship = await tx.friendship.update({
+                where: { id: friendshipId },
+                data: { status: "ACCEPTED" },
+            });
 
-        // Kiểm tra status
-        if (friendship.status !== "PENDING") {
-            throw new Error("Lời mời kết bạn này đã được xử lý");
-        }
+            // Kiểm tra xem trước đó đã có cuộc hội thoại nào giữa 2 người chưa (tránh tạo trùng)
+            const existingChat = await tx.conversation.findFirst({
+                where: {
+                    type: "DIRECT",
+                    AND: [
+                        { participants: { some: { userId: friendship.requesterId } } },
+                        { participants: { some: { userId: friendship.addresseeId } } }
+                    ]
+                }
+            });
 
-        return prisma.friendship.update({
-            where: { id: friendshipId }, 
-            data: { status: "ACCEPTED" }, 
+            if (!existingChat) {
+                // Tạo cuộc hội thoại mới và thêm 2 thành viên
+                await tx.conversation.create({
+                    data: {
+                        type: "DIRECT",
+                        participants: {
+                            create: [
+                                { userId: friendship.requesterId, role: "MEMBER" },
+                                { userId: friendship.addresseeId, role: "MEMBER" }
+                            ]
+                        }
+                    }
+                });
+            }
+
+            return updatedFriendship;
         });
     }
+    
     static async remove(friendshipId, userId){
         // Kiểm tra friendship có tồn tại không
         const friendship = await prisma.friendship.findUnique({
