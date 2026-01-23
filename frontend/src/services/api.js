@@ -95,4 +95,14 @@ export const sendMessage = async (chatId, content, files) => {
         },
     });
 };
+
+// Block / unblock user
+export const blockUser = (blockedId) =>
+    api.post("/blocklist/block", { blockedId });
+
+export const unblockUser = (blockedId) =>
+    api.post("/blocklist/unblock", { blockedId });
+
+export const getMyBlockList = () => api.get("/blocklist/me");
+
 export default api;

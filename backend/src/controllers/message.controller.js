@@ -1,4 +1,6 @@
 const MessageService = require("../services/message.service");
+const BlockListService = require("../services/blocklist.service");
+const ConversationService = require("../services/conversation.service");
 
 class MessageController {
     static async create(req, res) {
@@ -16,6 +18,28 @@ class MessageController {
                 return res.status(400).json({ 
                     error: "Thiếu ID người gửi (senderId). Vui lòng đăng nhập hoặc gửi kèm senderId trong body." 
                 });
+            }
+
+            // Kiểm tra blocklist cho chat 1-1
+            const conversation = await ConversationService.getById(conversationId);
+            if (!conversation) {
+                return res.status(404).json({ error: "Không tìm thấy cuộc trò chuyện" });
+            }
+
+            if (conversation.type === "DIRECT") {
+                const otherParticipant = conversation.participants.find(
+                    (p) => p.userId !== senderId
+                );
+                const receiverId = otherParticipant?.userId;
+
+                if (receiverId) {
+                    const isBlocked = await BlockListService.isBlocked(senderId, receiverId);
+                    if (isBlocked) {
+                        return res.status(403).json({
+                            error: "Bạn hoặc người kia đã chặn nhau, không thể gửi tin nhắn.",
+                        });
+                    }
+                }
             }
 
             // Log để debug
@@ -95,7 +119,22 @@ class MessageController {
     static async getByConversation(req, res) {
         try {
             const conversationId = Number(req.params.conversationId);
-            const msgs = await MessageService.getByConversation(conversationId);
+            const userId = req.user?.userId || req.user?.id;
+            
+            // Lấy participantId của user hiện tại để filter messages đã bị xóa
+            let participantId = null;
+            if (userId) {
+                const prisma = require("../config/prisma");
+                const participant = await prisma.participant.findFirst({
+                    where: {
+                        userId: Number(userId),
+                        conversationId: conversationId
+                    }
+                });
+                participantId = participant?.id || null;
+            }
+            
+            const msgs = await MessageService.getByConversation(conversationId, participantId);
             res.json(msgs);
         } catch (err) {
             res.status(500).json({ error: err.message });

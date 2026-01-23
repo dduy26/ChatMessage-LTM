@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { sendMessage } from "../services/api";
+import api, { sendMessage, blockUser, unblockUser, getMyBlockList } from "../services/api";
 import { io } from "socket.io-client";
 import { 
   MessageCircle, Phone, Settings, LogOut, Search, 
@@ -40,6 +40,7 @@ const Home = () => {
   const [conversationImages, setConversationImages] = useState([]);
   const [conversationFiles, setConversationFiles] = useState([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState([]);
   
   // State cho menu Plus và Emoji picker
   const [showPlusMenu, setShowPlusMenu] = useState(false);
@@ -60,11 +61,19 @@ const Home = () => {
     });
 
     socket.current.on("new message", (msg) => {
-      // chặn tin của chính mình
-      if (msg.senderId === user.id) return;
-
       const activeChat = currentChatRef.current;
       if (!activeChat || activeChat.id !== msg.conversationId) return;
+
+      // Kiểm tra xem có phải system message (thông báo rời nhóm) không
+      const isSystemMessage = msg.content && (
+        msg.content.includes("đã rời khỏi nhóm") || 
+        msg.content.includes("đã rời nhóm") ||
+        msg.content.includes("Bạn đã rời khỏi nhóm")
+      );
+
+      // System message luôn hiển thị, không chặn
+      // Tin nhắn thường: chặn tin của chính mình (đã được gửi từ handleSendMessage)
+      if (!isSystemMessage && msg.senderId === user.id) return;
 
       setMessages(prev => [...prev, msg]);
     });
@@ -445,6 +454,45 @@ const handleStartConversation = async (friend) => {
     }
   };
 
+  // Load danh sách những người mình đã chặn để hiển thị nút chặn/bỏ chặn
+  useEffect(() => {
+    const loadBlockList = async () => {
+      try {
+        const res = await getMyBlockList();
+        const ids = (res.data || []).map((item) => item.blocked?.id).filter(Boolean);
+        setBlockedUserIds(ids);
+      } catch (err) {
+        console.error("Lỗi lấy danh sách chặn:", err);
+      }
+    };
+
+    loadBlockList();
+  }, []);
+
+  const handleToggleBlock = async () => {
+    if (!currentChat || currentChat.type !== "DIRECT" || !currentChat.participantId) return;
+
+    const targetId = currentChat.participantId;
+    const isBlocked = blockedUserIds.includes(targetId);
+
+    try {
+      if (isBlocked) {
+        await unblockUser(targetId);
+        setBlockedUserIds((prev) => prev.filter((id) => id !== targetId));
+        alert("Đã bỏ chặn người dùng.");
+      } else {
+        if (!window.confirm("Bạn có chắc chắn muốn chặn người này? Họ sẽ không thể nhắn tin cho bạn.")) {
+          return;
+        }
+        await blockUser(targetId);
+        setBlockedUserIds((prev) => [...prev, targetId]);
+        alert("Đã chặn người dùng.");
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || "Không thể cập nhật trạng thái chặn");
+    }
+  };
+
   // Xóa lịch sử trò chuyện (cho bạn bè)
   const handleDeleteConversationHistory = async () => {
     if (!currentChat) return;
@@ -455,13 +503,17 @@ const handleStartConversation = async (friend) => {
 
     try {
       await api.delete(`/messages/conversation/${currentChat.id}/history`);
-      alert("Đã xóa lịch sử trò chuyện thành công!");
-      // Reload messages (sẽ trống)
+      
+      // Reload messages ngay lập tức (sẽ trống vì đã bị đánh dấu xóa)
       const res = await api.get(`/messages/conversation/${currentChat.id}`);
       setMessages(res.data || []);
+      
       // Reload attachments
       loadAttachments();
+      
+      alert("Đã xóa lịch sử trò chuyện thành công!");
     } catch (err) {
+      console.error("Lỗi xóa lịch sử:", err);
       alert(err.response?.data?.error || "Không thể xóa lịch sử trò chuyện");
     }
   };
@@ -479,16 +531,30 @@ const handleStartConversation = async (friend) => {
     }
 
     try {
-      await api.post(`/participants/conversation/${currentChat.id}/leave`, {
+      const res = await api.post(`/participants/conversation/${currentChat.id}/leave`, {
         deleteHistory
       });
-      alert(deleteHistory ? "Đã rời nhóm và xóa lịch sử trò chuyện!" : "Đã rời nhóm thành công!");
       
-      // Xóa conversation khỏi danh sách
-      setConversations(prev => prev.filter(c => c.id !== currentChat.id));
-      setCurrentChat(null);
-      setShowInfoPanel(false);
-      setMessages([]);
+      // Nếu có system message từ backend, thêm vào messages để hiển thị
+      if (res.data?.systemMessage) {
+        setMessages(prev => [...prev, res.data.systemMessage]);
+        // Đợi một chút để user thấy system message trước khi đóng
+        setTimeout(() => {
+          // Xóa conversation khỏi danh sách
+          setConversations(prev => prev.filter(c => c.id !== currentChat.id));
+          setCurrentChat(null);
+          setShowInfoPanel(false);
+          setMessages([]);
+        }, 1000);
+      } else {
+        // Nếu không có system message, đóng ngay
+        setConversations(prev => prev.filter(c => c.id !== currentChat.id));
+        setCurrentChat(null);
+        setShowInfoPanel(false);
+        setMessages([]);
+      }
+      
+      alert(deleteHistory ? "Đã rời nhóm và xóa lịch sử trò chuyện!" : "Đã rời nhóm thành công!");
     } catch (err) {
       alert(err.response?.data?.error || "Không thể rời nhóm");
     }
@@ -910,6 +976,13 @@ const handleStartConversation = async (friend) => {
             const senderName = msg.sender?.fullName || msg.sender?.username || "Người dùng";
             const senderAvatar = msg.sender?.avatar;
             const senderIsOnline = msg.sender?.isOnline || false;
+            
+            // Kiểm tra xem có phải system message (thông báo rời nhóm) không
+            const isSystemMessage = msg.content && (
+              msg.content.includes("đã rời khỏi nhóm") || 
+              msg.content.includes("đã rời nhóm") ||
+              msg.content.includes("Bạn đã rời khỏi nhóm")
+            );
 
             // Hàm render nội dung tin nhắn chung cho cả 2 bên để tránh lặp code
             const renderMessageContent = () => {
@@ -950,6 +1023,31 @@ const handleStartConversation = async (friend) => {
                 </div>
               );
             };
+
+            // Hiển thị system message (thông báo rời nhóm) với style đặc biệt
+            if (isSystemMessage) {
+              return (
+                <div key={msg.id || idx} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  marginBottom: '12px',
+                  marginTop: '8px'
+                }}>
+                  <div style={{
+                    padding: '6px 12px',
+                    background: '#f3f4f6',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    color: '#6b7280',
+                    fontStyle: 'italic',
+                    textAlign: 'center'
+                  }}>
+                    {msg.content}
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div key={msg.id || idx} className={`msg-row ${isMe ? 'me' : 'other'}`} style={{ marginBottom: '12px' }}>
@@ -1494,30 +1592,70 @@ const handleStartConversation = async (friend) => {
               gap: '12px'
             }}>
               {currentChat.type === "DIRECT" ? (
-                // Actions cho bạn bè
-                <button
-                  onClick={handleDeleteConversationHistory}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: '#fee2e2',
-                    color: '#dc2626',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    fontWeight: '500',
-                    transition: '0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
-                >
-                  <Trash2 size={18} />
-                  Xóa lịch sử trò chuyện
-                </button>
+                // Actions cho bạn bè (DIRECT)
+                <>
+                  <button
+                    onClick={handleToggleBlock}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: blockedUserIds.includes(currentChat.participantId)
+                        ? '#e5e7eb'
+                        : '#fee2e2',
+                      color: blockedUserIds.includes(currentChat.participantId)
+                        ? '#4b5563'
+                        : '#dc2626',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = blockedUserIds.includes(currentChat.participantId)
+                        ? '#d1d5db'
+                        : '#fecaca';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = blockedUserIds.includes(currentChat.participantId)
+                        ? '#e5e7eb'
+                        : '#fee2e2';
+                    }}
+                  >
+                    <Trash2 size={18} />
+                    {blockedUserIds.includes(currentChat.participantId)
+                      ? 'Bỏ chặn người này'
+                      : 'Chặn người này'}
+                  </button>
+
+                  <button
+                    onClick={handleDeleteConversationHistory}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
+                  >
+                    <Trash2 size={18} />
+                    Xóa lịch sử trò chuyện
+                  </button>
+                </>
               ) : (
                 // Actions cho nhóm
                 <>

@@ -60,7 +60,16 @@ class ParticipantController {
             // Kiểm tra conversation có phải là GROUP không
             const prisma = require("../config/prisma");
             const conversation = await prisma.conversation.findUnique({
-                where: { id: conversationId }
+                where: { id: conversationId },
+                include: {
+                    participants: {
+                        include: {
+                            user: {
+                                select: { id: true, fullName: true, username: true }
+                            }
+                        }
+                    }
+                }
             });
 
             if (!conversation) {
@@ -71,6 +80,12 @@ class ParticipantController {
                 return res.status(400).json({ error: "Chỉ có thể rời nhóm, không thể rời cuộc trò chuyện cá nhân" });
             }
 
+            // Lấy thông tin user đang rời nhóm
+            const leavingUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, fullName: true, username: true }
+            });
+
             // Nếu muốn xóa lịch sử, gọi MessageService
             if (deleteHistory) {
                 const MessageService = require("../services/message.service");
@@ -79,11 +94,28 @@ class ParticipantController {
 
             // Rời nhóm
             await ParticipantService.removeParticipant(userId, conversationId);
+
+            // Tạo system message thông báo người dùng đã rời nhóm
+            const MessageService = require("../services/message.service");
+            const systemMessage = await MessageService.create({
+                content: `"${leavingUser?.fullName || leavingUser?.username || 'Người dùng'}" đã rời khỏi nhóm.`,
+                senderId: userId, // Dùng userId của người rời để hiển thị tên
+                conversationId: conversationId,
+                attachments: []
+            });
+
+            // Broadcast system message đến tất cả thành viên còn lại trong nhóm
+            const io = req.app.get("io");
+            if (io) {
+                const roomName = `conversation_${conversationId}`;
+                io.to(roomName).emit("new message", systemMessage);
+            }
             
             res.json({ 
                 message: deleteHistory 
                     ? "Đã rời nhóm và xóa lịch sử trò chuyện" 
-                    : "Đã rời nhóm thành công" 
+                    : "Đã rời nhóm thành công",
+                systemMessage: systemMessage
             });
         } catch (err) {
             console.error("Lỗi rời nhóm:", err);
