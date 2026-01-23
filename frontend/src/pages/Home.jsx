@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api, { sendMessage, blockUser, unblockUser, getMyBlockList } from "../services/api";
 import { io } from "socket.io-client";
 import { 
   MessageCircle, Phone, Settings, LogOut, Search, 
-  Send, Image, Paperclip, MoreVertical, Plus, Users, X, UserPlus, Check
+  Send, Image, Paperclip, MoreVertical, Plus, Users, X, UserPlus, Check,
+  Info, Trash2, LogOut as LeaveIcon, FileText, Download, Smile
 } from "lucide-react";
 import Friends from "./Friends";
 
@@ -16,6 +17,7 @@ const Home = () => {
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef();
   const socket = useRef();
+  const currentChatRef = useRef(null);
 
   // --- STATE MỚI CHO PHẦN BẠN BÈ ---
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' hoặc 'friends'
@@ -32,78 +34,121 @@ const Home = () => {
   
   // State cho tìm kiếm bạn bè trong conversation
   const [conversationSearch, setConversationSearch] = useState("");
+  
+  // State cho panel thông tin hội thoại
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [conversationImages, setConversationImages] = useState([]);
+  const [conversationFiles, setConversationFiles] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState([]);
+  
+  // State cho menu Plus và Emoji picker
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // 1. Kết nối Socket và lấy danh sách chat (Giữ nguyên của bạn)
-  useEffect(() => {
+  // file
+  const [selectedFiles, setSelectedFiles] = useState([]); // Lưu trữ file đã chọn
+  const [filePreviews, setFilePreviews] = useState([]); // Lưu trữ preview URLs cho hiển thị
+  const fileInputRef = useRef(); // Ref để kích hoạt input file ẩn
+  useEffect(() => {currentChatRef.current = currentChat;}, [currentChat]);
+    useEffect(() => {
+    // Khởi tạo kết nối
     socket.current = io("http://localhost:5000", {
-      query: { token: localStorage.getItem("accessToken") }
+      // Dùng auth thay vì query để khớp với middleware xác thực ở Backend
+      auth: { token: localStorage.getItem("accessToken") } 
     });
 
+    socket.current.on("new message", (msg) => {
+      const activeChat = currentChatRef.current;
+      if (!activeChat || activeChat.id !== msg.conversationId) return;
+
+      // Kiểm tra xem có phải system message (thông báo rời nhóm) không
+      const isSystemMessage = msg.content && (
+        msg.content.includes("đã rời khỏi nhóm") || 
+        msg.content.includes("đã rời nhóm") ||
+        msg.content.includes("Bạn đã rời khỏi nhóm")
+      );
+
+      // System message luôn hiển thị, không chặn
+      // Tin nhắn thường: chặn tin của chính mình (đã được gửi từ handleSendMessage)
+      if (!isSystemMessage && msg.senderId === user.id) return;
+
+      setMessages(prev => [...prev, msg]);
+    });
+
+    // Lắng nghe tin nhắn mới
     socket.current.on("user_status_change", (data) => {
-      console.log("User status changed:", data);
-      
-      // Cập nhật trạng thái trong conversations
-      setConversations((prev) =>
-        prev.map((conv) => {
-          if (conv.participantId === data.userId) {
-            return { ...conv, isOnline: data.isOnline };
-          }
-          return conv;
-        })
-      );
+        // 1. Update sidebar
+        setConversations(prev =>
+          prev.map(conv =>
+            conv.participantId === data.userId? { ...conv, isOnline: data.isOnline }: conv
+          )
+        );
 
-      // Cập nhật trạng thái trong currentChat
-      setCurrentChat((prev) => {
-        if (prev && prev.participantId === data.userId) {
-          return { ...prev, isOnline: data.isOnline };
-        }
-        return prev;
+        // 2. Update messages 
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.senderId === data.userId
+              ? { ...msg, sender: { ...msg.sender, isOnline: data.isOnline } }
+              : msg
+          )
+        );
+
+        // 3. Update friends 
+        setFriends(prev =>
+          prev.map(friend =>
+            friend.id === data.userId
+              ? { ...friend, isOnline: data.isOnline }
+              : friend
+          )
+        );
       });
-
-      // Cập nhật trạng thái trong messages (cập nhật sender.isOnline)
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.senderId === data.userId && msg.sender) {
-            return {
-              ...msg,
-              sender: {
-                ...msg.sender,
-                isOnline: data.isOnline
-              }
-            };
-          }
-          return msg;
-        })
-      );
-
-      // Cập nhật trạng thái trong friends list
-      setFriends((prev) =>
-        prev.map((friend) => {
-          if (friend.id === data.userId) {
-            return { ...friend, isOnline: data.isOnline };
-          }
-          return friend;
-        })
-      );
-    });
-
-    const fetchConversations = async () => {
+    // Fetch dữ liệu ban đầu
+    const initData = async () => {
       try {
         const res = await api.get("/conversations");
         setConversations(res.data);
+        fetchPendingRequests();
+        fetchFriends();
       } catch (err) { console.error(err); }
     };
-    fetchConversations();
-
-    // Lấy lời mời kết bạn khi vào trang
-    fetchPendingRequests();
-    // Lấy danh sách bạn bè khi vào trang
-    fetchFriends();
+    initData();
 
     return () => socket.current.disconnect();
   }, []);
+
+  // Cleanup preview URLs khi component unmount
+  useEffect(() => {
+    return () => {
+      filePreviews.forEach(preview => {
+        if (preview.url && preview.type === 'image') {
+          URL.revokeObjectURL(preview.url);
+        }
+      });
+    };
+  }, [filePreviews]);
+
+  useEffect(() => { if (!currentChat || !socket.current) return;
+    
+    // Tham gia vào phòng chat cụ thể (Nhóm hoặc Cá nhân)
+    socket.current.emit("join_conversation", currentChat.id);
+
+    // Fetch tin nhắn cũ của cuộc trò chuyện đó
+  (async () => {
+    try {
+      const res = await api.get(`/messages/conversation/${currentChat.id}`);
+      setMessages(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  })();
+    // rời room cũ khi đổi chat
+  return () => {
+    socket.current.emit("leave_conversation", currentChat.id);
+  };
+}, [currentChat?.id]);
 
   // Logic lấy lời mời kết bạn (Pending)
   const fetchPendingRequests = async () => {
@@ -121,50 +166,47 @@ const Home = () => {
     } catch (err) { console.error("Lỗi lấy danh sách bạn bè:", err); }
   };
 
-  // 2. Lấy tin nhắn và cập nhật trạng thái
-  useEffect(() => {
-    if (!currentChat) return;
-    const fetchMessages = async () => {
-      try {
-        const res = await api.get(`/messages/conversation/${currentChat.id}`);
-        setMessages(res.data);
-        
-        // Cập nhật trạng thái online từ messages nếu có
-        if (res.data.length > 0) {
-          const otherUserMessages = res.data.filter(msg => msg.senderId !== user.id);
-          if (otherUserMessages.length > 0) {
-            const otherUser = otherUserMessages[0].sender;
-            if (otherUser && currentChat.participantId === otherUser.id) {
-              setCurrentChat(prev => ({
-                ...prev,
-                isOnline: otherUser.isOnline || false
-              }));
-            }
-          }
-        }
-      } catch (err) { console.error(err); }
-    };
-    fetchMessages();
-  }, [currentChat, user.id]);
 
-  // 3. Auto scroll (Giữ nguyên)
+  //  Auto scroll
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 4. Gửi tin nhắn (Giữ nguyên)
+  //  Gửi tin nhắn (text + file)
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentChat) return;
-    try {
-      const res = await api.post(`/messages/${currentChat.id}`, {
-        content: newMessage,
-        senderId: user.id
-      });
-      setMessages([...messages, res.data]);
-      setNewMessage("");
-    } catch { alert("Lỗi gửi tin!"); }
-  };
+    if ((!newMessage.trim() && selectedFiles.length === 0) || !currentChat) return;
 
+    try {
+      const res = await sendMessage(
+        currentChat.id,
+        newMessage.trim() || "",
+        selectedFiles
+      );
+
+      if (!res.data || !res.data.id) {
+        console.error("Response không hợp lệ:", res.data);
+        alert("Lỗi: Phản hồi từ server không hợp lệ");
+        return;
+      }
+
+      // Phát socket để người khác nhận được file ngay lập tức
+      socket.current.emit("send_message", res.data);
+
+      setMessages((prev) => [...prev, res.data]);
+      setNewMessage("");
+      setSelectedFiles([]);
+      // Xóa preview URLs để giải phóng memory
+      filePreviews.forEach((preview) => {
+        if (preview.url && preview.type === "image") {
+          URL.revokeObjectURL(preview.url);
+        }
+      });
+      setFilePreviews([]);
+    } catch (err) {
+      console.error("Lỗi khi gửi tin nhắn:", err);
+      alert("Lỗi khi gửi tin nhắn: " + (err.response?.data?.error || err.message));
+    }
+  };
   // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
     try {
@@ -339,83 +381,42 @@ const Home = () => {
   };
 
   // Tìm hoặc tạo conversation với bạn bè
-  const handleStartConversation = async (friend) => {
+const handleStartConversation = async (friend) => {
     try {
-      // Tìm conversation đã tồn tại với bạn này
-      // Kiểm tra theo participantId hoặc title
-      const existingConv = conversations.find(conv => {
-        if (conv.participantId === friend.id) return true;
-        if (conv.title === friend.username || conv.title === friend.fullName) return true;
-        return false;
-      });
+        // 1. Gọi API "Tìm hoặc Tạo" duy nhất
+        const res = await api.post("/conversations/direct", { 
+            receiverId: friend.id 
+        });
 
-      if (existingConv) {
-        setCurrentChat(existingConv);
-        setConversationSearch(""); // Clear search
-        return;
-      }
+        const convData = res.data;
 
-      // Tạo conversation mới
-      const convRes = await api.post("/conversations", {
-        type: "DIRECT"
-      });
+        // 2. Format dữ liệu để hiển thị đồng nhất với danh sách sidebar
+        const formattedConv = {
+            id: convData.id,
+            type: convData.type,
+            title: friend.fullName || friend.username || "Người dùng",
+            avatar: friend.avatar,
+            participantId: friend.id,
+            isOnline: friend.isOnline || false,
+            participants: convData.participants
+        };
 
-      // Thêm cả 2 người vào conversation
-      await api.post("/participants", {
-        userId: user.id,
-        conversationId: convRes.data.id,
-        role: "MEMBER"
-      });
+        // 3. Cập nhật state conversations (đưa lên đầu danh sách nếu chưa có)
+        setConversations(prev => {
+            const exists = prev.find(c => c.id === formattedConv.id);
+            if (exists) return prev;
+            return [formattedConv, ...prev];
+        });
 
-      await api.post("/participants", {
-        userId: friend.id,
-        conversationId: convRes.data.id,
-        role: "MEMBER"
-      });
-
-      // Tạo conversation object để hiển thị
-      const conversationToDisplay = {
-        ...convRes.data,
-        title: friend.fullName || friend.username || "Người dùng",
-        avatar: friend.avatar,
-        participantId: friend.id,
-        isOnline: false
-      };
-
-      // Refresh danh sách conversations và set current chat
-      const fetchConversations = async () => {
-        try {
-          const res = await api.get("/conversations");
-          setConversations(res.data);
-          // Tìm conversation vừa tạo hoặc sử dụng conversation object đã tạo
-          const createdConv = res.data.find(c => c.id === convRes.data.id);
-          if (createdConv) {
-            setCurrentChat({
-              ...createdConv,
-              title: friend.fullName || friend.username || "Người dùng",
-              avatar: friend.avatar,
-              participantId: friend.id
-            });
-          } else {
-            // Nếu không tìm thấy trong danh sách, dùng conversation object đã tạo
-            setCurrentChat(conversationToDisplay);
-            setConversations([conversationToDisplay, ...res.data]);
-          }
-        } catch (err) { 
-          console.error(err);
-          // Nếu fetch lỗi, vẫn set conversation đã tạo
-          setCurrentChat(conversationToDisplay);
-          setConversations([conversationToDisplay, ...conversations]);
-        }
-      };
-      await fetchConversations();
-      
-      setConversationSearch(""); // Clear search
+        // 4. Mở cửa sổ chat
+        setCurrentChat(formattedConv);
+        setConversationSearch(""); 
+        
     } catch (err) {
-      console.error("Lỗi tạo conversation:", err);
-      alert(err.response?.data?.error || "Không thể tạo cuộc trò chuyện");
+        console.error("Lỗi khi bắt đầu trò chuyện:", err);
+        alert(err.response?.data?.error || "Không thể kết nối với người dùng này");
     }
-  };
+};
 
   // Filter bạn bè dựa trên search query
   const filteredFriends = friends.filter(friend => {
@@ -425,6 +426,139 @@ const Home = () => {
     const email = (friend.email || "").toLowerCase();
     return name.includes(searchLower) || email.includes(searchLower);
   });
+
+  // Load attachments khi mở info panel
+  useEffect(() => {
+    if (showInfoPanel && currentChat) {
+      loadAttachments();
+    }
+  }, [showInfoPanel, currentChat?.id]);
+
+  const loadAttachments = async () => {
+    if (!currentChat) return;
+    
+    setLoadingAttachments(true);
+    try {
+      const [imagesRes, filesRes] = await Promise.all([
+        api.get(`/attachments/conversation/${currentChat.id}/images`),
+        api.get(`/attachments/conversation/${currentChat.id}/files`)
+      ]);
+      setConversationImages(imagesRes.data || []);
+      setConversationFiles(filesRes.data || []);
+    } catch (err) {
+      console.error("Lỗi load attachments:", err);
+      setConversationImages([]);
+      setConversationFiles([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  // Load danh sách những người mình đã chặn để hiển thị nút chặn/bỏ chặn
+  useEffect(() => {
+    const loadBlockList = async () => {
+      try {
+        const res = await getMyBlockList();
+        const ids = (res.data || []).map((item) => item.blocked?.id).filter(Boolean);
+        setBlockedUserIds(ids);
+      } catch (err) {
+        console.error("Lỗi lấy danh sách chặn:", err);
+      }
+    };
+
+    loadBlockList();
+  }, []);
+
+  const handleToggleBlock = async () => {
+    if (!currentChat || currentChat.type !== "DIRECT" || !currentChat.participantId) return;
+
+    const targetId = currentChat.participantId;
+    const isBlocked = blockedUserIds.includes(targetId);
+
+    try {
+      if (isBlocked) {
+        await unblockUser(targetId);
+        setBlockedUserIds((prev) => prev.filter((id) => id !== targetId));
+        alert("Đã bỏ chặn người dùng.");
+      } else {
+        if (!window.confirm("Bạn có chắc chắn muốn chặn người này? Họ sẽ không thể nhắn tin cho bạn.")) {
+          return;
+        }
+        await blockUser(targetId);
+        setBlockedUserIds((prev) => [...prev, targetId]);
+        alert("Đã chặn người dùng.");
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || "Không thể cập nhật trạng thái chặn");
+    }
+  };
+
+  // Xóa lịch sử trò chuyện (cho bạn bè)
+  const handleDeleteConversationHistory = async () => {
+    if (!currentChat) return;
+    
+    if (!window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện? Hành động này không thể hoàn tác.")) {
+      return;
+    }
+
+    try {
+      await api.delete(`/messages/conversation/${currentChat.id}/history`);
+      
+      // Reload messages ngay lập tức (sẽ trống vì đã bị đánh dấu xóa)
+      const res = await api.get(`/messages/conversation/${currentChat.id}`);
+      setMessages(res.data || []);
+      
+      // Reload attachments
+      loadAttachments();
+      
+      alert("Đã xóa lịch sử trò chuyện thành công!");
+    } catch (err) {
+      console.error("Lỗi xóa lịch sử:", err);
+      alert(err.response?.data?.error || "Không thể xóa lịch sử trò chuyện");
+    }
+  };
+
+  // Rời nhóm (cho GROUP)
+  const handleLeaveGroup = async (deleteHistory = false) => {
+    if (!currentChat || currentChat.type !== "GROUP") return;
+    
+    const message = deleteHistory 
+      ? "Bạn có chắc chắn muốn rời nhóm và xóa toàn bộ lịch sử trò chuyện? Hành động này không thể hoàn tác."
+      : "Bạn có chắc chắn muốn rời nhóm?";
+    
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    try {
+      const res = await api.post(`/participants/conversation/${currentChat.id}/leave`, {
+        deleteHistory
+      });
+      
+      // Nếu có system message từ backend, thêm vào messages để hiển thị
+      if (res.data?.systemMessage) {
+        setMessages(prev => [...prev, res.data.systemMessage]);
+        // Đợi một chút để user thấy system message trước khi đóng
+        setTimeout(() => {
+          // Xóa conversation khỏi danh sách
+          setConversations(prev => prev.filter(c => c.id !== currentChat.id));
+          setCurrentChat(null);
+          setShowInfoPanel(false);
+          setMessages([]);
+        }, 1000);
+      } else {
+        // Nếu không có system message, đóng ngay
+        setConversations(prev => prev.filter(c => c.id !== currentChat.id));
+        setCurrentChat(null);
+        setShowInfoPanel(false);
+        setMessages([]);
+      }
+      
+      alert(deleteHistory ? "Đã rời nhóm và xóa lịch sử trò chuyện!" : "Đã rời nhóm thành công!");
+    } catch (err) {
+      alert(err.response?.data?.error || "Không thể rời nhóm");
+    }
+  };
 
   const getAvatar = (name, url) => url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name||"U")}&background=random`;
 
@@ -827,105 +961,467 @@ const Home = () => {
                </div>
                <div style={{display:'flex', gap:20, color:'#7360f2'}}>
                   <Phone style={{cursor:'pointer'}} />
+                  <Info 
+                    style={{cursor:'pointer'}} 
+                    onClick={() => setShowInfoPanel(!showInfoPanel)}
+                    title="Thông tin hội thoại"
+                  />
                   <MoreVertical style={{cursor:'pointer'}} />
                </div>
             </div>
 
-            <div className="messages-area">
-              {messages.map((msg, idx) => {
-                const isMe = msg.senderId === user.id;
-                const senderName = msg.sender?.fullName || msg.sender?.username || "Người dùng";
-                const senderAvatar = msg.sender?.avatar;
-                const senderIsOnline = msg.sender?.isOnline || false;
-                
-                return (
-                  <div key={msg.id || idx} className={`msg-row ${isMe ? 'me' : 'other'}`} style={{ marginBottom: '12px' }}>
-                    {!isMe && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <div style={{ position: 'relative' }}>
-                            <img 
-                              src={getAvatar(senderName, senderAvatar)} 
-                              style={{width:32, height:32, borderRadius:'50%', objectFit: 'cover'}} 
-                              alt={senderName}
-                            />
-                            <div style={{ 
-                              position: 'absolute', 
-                              bottom: 0, 
-                              right: 0, 
-                              width: 10, 
-                              height: 10, 
-                              borderRadius: '50%', 
-                              background: senderIsOnline ? '#22c55e' : '#94a3b8', 
-                              border: '2px solid white' 
-                            }}></div>
-                          </div>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
-                            {senderName}
-                          </span>
-                          <span style={{ fontSize: '11px', color: senderIsOnline ? '#22c55e' : '#9ca3af' }}>
-                            {senderIsOnline ? '● Online' : '● Offline'}
-                          </span>
-                        </div>
-                        <div className="msg-bubble" style={{ marginLeft: '40px' }}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    )}
-                    {isMe && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                            {user.isOnline ? '● Online' : '● Offline'}
-                          </span>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
-                            {user.fullName || user.username || "Bạn"}
-                          </span>
-                          <div style={{ position: 'relative' }}>
-                            <img 
-                              src={getAvatar(user.fullName || user.username, user.avatar)} 
-                              style={{width:32, height:32, borderRadius:'50%', objectFit: 'cover'}} 
-                              alt="Bạn"
-                            />
-                            <div style={{ 
-                              position: 'absolute', 
-                              bottom: 0, 
-                              right: 0, 
-                              width: 10, 
-                              height: 10, 
-                              borderRadius: '50%', 
-                              background: user.isOnline ? '#22c55e' : '#94a3b8', 
-                              border: '2px solid white' 
-                            }}></div>
-                          </div>
-                        </div>
-                        <div className="msg-bubble" style={{ marginRight: '40px' }}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-              <div ref={scrollRef} />
-            </div>
+        <div className="messages-area">
+          {messages.map((msg, idx) => {
+            const isMe = msg.senderId === user.id;
+            const senderName = msg.sender?.fullName || msg.sender?.username || "Người dùng";
+            const senderAvatar = msg.sender?.avatar;
+            const senderIsOnline = msg.sender?.isOnline || false;
+            
+            // Kiểm tra xem có phải system message (thông báo rời nhóm) không
+            const isSystemMessage = msg.content && (
+              msg.content.includes("đã rời khỏi nhóm") || 
+              msg.content.includes("đã rời nhóm") ||
+              msg.content.includes("Bạn đã rời khỏi nhóm")
+            );
 
-            <div className="chat-input-area">
-               <Plus size={24} color="#888" style={{cursor:'pointer'}} />
-               <div style={{flex:1, background:'#f3f4f6', borderRadius:24, padding:'10px 15px', display:'flex', alignItems:'center'}}>
-                  <input 
-                    className="chat-input" 
-                    placeholder="Nhập tin nhắn..." 
-                    value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                  />
-                  <div style={{display:'flex', gap:10, color:'#888'}}>
-                     <Image size={20} style={{cursor:'pointer'}} />
-                     <Paperclip size={20} style={{cursor:'pointer'}} />
+            // Hàm render nội dung tin nhắn chung cho cả 2 bên để tránh lặp code
+            const renderMessageContent = () => {
+              // Kiểm tra xem có nội dung text hoặc file không
+              const hasContent = msg.content && msg.content.trim().length > 0;
+              const hasAttachments = msg.attachments && msg.attachments.length > 0;
+              
+              // Nếu không có cả text và file, không hiển thị bubble
+              if (!hasContent && !hasAttachments) {
+                return null;
+              }
+
+              return (
+                <div className="msg-bubble" style={{ marginRight: isMe ? '40px' : 0 }}>
+                  {/* Hiển thị text nếu có nội dung */}
+                  {hasContent && <p style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</p>}
+                  
+                  {/* Hiển thị file đính kèm (ảnh/file) */}
+                  {hasAttachments && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: hasContent ? '8px' : '0' }}>
+                      {msg.attachments.map((file) => (
+                        <div key={file.id || file.fileUrl}>
+                          {file.fileType?.includes("image") ? (
+                            <img 
+                              src={file.fileUrl} 
+                              style={{ maxWidth: '200px', borderRadius: 8, display: 'block' }} 
+                              alt="attachment" 
+                            />
+                          ) : (
+                            <a href={file.fileUrl} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
+                              📄 {file.fileName || "Tệp tin"}
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            // Hiển thị system message (thông báo rời nhóm) với style đặc biệt
+            if (isSystemMessage) {
+              return (
+                <div key={msg.id || idx} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  marginBottom: '12px',
+                  marginTop: '8px'
+                }}>
+                  <div style={{
+                    padding: '6px 12px',
+                    background: '#f3f4f6',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    color: '#6b7280',
+                    fontStyle: 'italic',
+                    textAlign: 'center'
+                  }}>
+                    {msg.content}
                   </div>
-               </div>
-               <div onClick={handleSendMessage} className="send-btn"><Send size={24} /></div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={msg.id || idx} className={`msg-row ${isMe ? 'me' : 'other'}`} style={{ marginBottom: '12px' }}>
+                {!isMe && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <img src={getAvatar(senderName, senderAvatar)} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt={senderName} />
+                        <div style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: senderIsOnline ? '#22c55e' : '#94a3b8', border: '2px solid white' }}></div>
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{senderName}</span>
+                    </div>
+                    {/* GỌI HÀM RENDER */}
+                    {renderMessageContent()}
+                  </div>
+                )}
+
+                {isMe && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>Bạn</span>
+                      <img 
+                        src={getAvatar(user.fullName || user.username, user.avatar)} 
+                        style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }} 
+                        alt="Bạn" 
+                        onClick={() => navigate("/profile")}
+                        title="Xem hồ sơ của bạn"
+                      />
+                    </div>
+                    {/* GỌI HÀM RENDER - Đã sửa lỗi hiển thị tại đây */}
+                    {renderMessageContent()}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div ref={scrollRef} />
+        </div>
+            <div className="chat-input-area">
+              {/* Preview area cho files đã chọn */}
+              {filePreviews.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  padding: '10px 15px',
+                  background: '#f9fafb',
+                  borderBottom: '1px solid #e5e7eb',
+                  overflowX: 'auto',
+                  alignItems: 'center'
+                }}>
+                  {/* Nút thêm file */}
+                  <div
+                    onClick={() => fileInputRef.current.click()}
+                    style={{
+                      minWidth: '60px',
+                      height: '60px',
+                      borderRadius: '8px',
+                      border: '2px dashed #d1d5db',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      background: '#fff',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Plus size={24} color="#9ca3af" />
+                  </div>
+                  
+                  {/* Preview các file đã chọn */}
+                  {filePreviews.map((preview) => (
+                    <div
+                      key={preview.id}
+                      style={{
+                        position: 'relative',
+                        minWidth: '60px',
+                        height: '60px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        background: preview.type === 'image' ? 'transparent' : '#f3f4f6'
+                      }}
+                    >
+                      {preview.type === 'image' ? (
+                        <img
+                          src={preview.url}
+                          alt={preview.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '4px'
+                        }}>
+                          <Paperclip size={20} color="#6b7280" />
+                          <span style={{
+                            fontSize: '10px',
+                            color: '#6b7280',
+                            textAlign: 'center',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            width: '100%'
+                          }}>
+                            {preview.name.length > 8 ? preview.name.substring(0, 8) + '...' : preview.name}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Nút X để xóa file */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Tìm index của preview trong mảng
+                          const previewIndex = filePreviews.findIndex(p => p.id === preview.id);
+                          
+                          // Xóa file khỏi danh sách selectedFiles
+                          const newFiles = selectedFiles.filter((_, index) => index !== previewIndex);
+                          setSelectedFiles(newFiles);
+                          
+                          // Xóa preview và revoke URL
+                          if (preview.url && preview.type === 'image') {
+                            URL.revokeObjectURL(preview.url);
+                          }
+                          setFilePreviews(prev => prev.filter(p => p.id !== preview.id));
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          border: 'none',
+                          color: 'white',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          padding: 0
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/*input file ẩn*/}
+              <input 
+                type="file" 
+                multiple 
+                hidden 
+                ref={fileInputRef}
+                accept="*/*" 
+                onChange={(e) => {
+                  const files = Array.from(e.target.files);
+                  setSelectedFiles(files);
+                  
+                  // Tạo preview URLs cho các file
+                  const previews = files.map((file, index) => {
+                    if (file.type.startsWith('image/')) {
+                      return {
+                        id: `preview-${Date.now()}-${index}`,
+                        type: 'image',
+                        url: URL.createObjectURL(file),
+                        name: file.name,
+                        file: file
+                      };
+                    } else {
+                      return {
+                        id: `preview-${Date.now()}-${index}`,
+                        type: 'file',
+                        url: null,
+                        name: file.name,
+                        file: file,
+                        size: file.size
+                      };
+                    }
+                  });
+                  setFilePreviews(previews);
+                }}
+              />
+              
+              <div style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px 15px', position:'relative'}}>
+                {/* Plus button với menu dropdown */}
+                <div style={{ position: 'relative' }}>
+                  <Plus 
+                    size={24} 
+                    color="#888" 
+                    style={{cursor:'pointer'}} 
+                    onClick={() => setShowPlusMenu(!showPlusMenu)}
+                  />
+                  
+                  {/* Menu dropdown */}
+                  {showPlusMenu && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      marginBottom: '10px',
+                      background: 'white',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      zIndex: 1000,
+                      minWidth: '150px'
+                    }}>
+                      <button
+                        onClick={() => {
+                          fileInputRef.current.setAttribute('accept', 'image/*');
+                          fileInputRef.current.click();
+                          setShowPlusMenu(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '10px 12px',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: '#374151',
+                          transition: '0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Image size={20} color="#7360f2" />
+                        <span>Chọn ảnh</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          fileInputRef.current.removeAttribute('accept');
+                          fileInputRef.current.click();
+                          setShowPlusMenu(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '10px 12px',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: '#374151',
+                          transition: '0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Paperclip size={20} color="#7360f2" />
+                        <span>Chọn file</span>
+                      </button>
+                      
+                      <div style={{ height: '1px', background: '#e5e7eb', margin: '4px 0' }}></div>
+                      
+                      <button
+                        onClick={() => {
+                          setShowEmojiPicker(true);
+                          setShowPlusMenu(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '10px 12px',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: '#374151',
+                          transition: '0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <Smile size={20} color="#7360f2" />
+                        <span>Icon/Emoji</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                <div style={{flex:1, background:'#f3f4f6', borderRadius:24, padding:'10px 15px', display:'flex', alignItems:'center', position:'relative'}}>
+                    <input 
+                      className="chat-input " 
+                      placeholder="Nhập tin nhắn..." 
+                      value={newMessage}
+                      onChange={e => setNewMessage(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                    />
+                </div>
+                
+                {/* Emoji picker button */}
+                <div style={{ position: 'relative' }}>
+                  <Smile 
+                    size={24} 
+                    color="#888" 
+                    style={{cursor:'pointer'}} 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  />
+                  
+                  {/* Emoji Picker */}
+                  {showEmojiPicker && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      right: 0,
+                      marginBottom: '10px',
+                      background: 'white',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      padding: '12px',
+                      zIndex: 1001,
+                      width: '300px',
+                      maxHeight: '300px',
+                      overflowY: 'auto'
+                    }}>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(8, 1fr)', 
+                        gap: '8px' 
+                      }}>
+                        {['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'].map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              setNewMessage(prev => prev + emoji);
+                              setShowEmojiPicker(false);
+                            }}
+                            style={{
+                              fontSize: '24px',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              transition: '0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div onClick={handleSendMessage} className="send-btn"><Send size={24} /></div>
+              </div>
             </div>
           </>
         ) : (
@@ -935,6 +1431,304 @@ const Home = () => {
           </div>
         )}
       </div>
+
+      {/* --- PANEL THÔNG TIN HỘI THOẠI (Bên phải) --- */}
+      {showInfoPanel && currentChat && (
+        <div style={{
+          width: '350px',
+          background: 'white',
+          borderLeft: '1px solid #e5e7eb',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden'
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '20px',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Thông tin hội thoại</h3>
+            <X 
+              size={20} 
+              style={{ cursor: 'pointer', color: '#6b7280' }} 
+              onClick={() => setShowInfoPanel(false)}
+            />
+          </div>
+
+          {/* Content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+            {/* Ảnh/Video Section */}
+            <div style={{ marginBottom: '30px' }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '15px'
+              }}>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Ảnh/Video</h4>
+                {conversationImages.length > 0 && (
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                    {conversationImages.length} ảnh
+                  </span>
+                )}
+              </div>
+              
+              {loadingAttachments ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+                  Đang tải...
+                </div>
+              ) : conversationImages.length > 0 ? (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '8px'
+                }}>
+                  {conversationImages.map((img) => (
+                    <div
+                      key={img.id}
+                      style={{
+                        aspectRatio: '1',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                      onClick={() => window.open(img.fileUrl, '_blank')}
+                    >
+                      <img
+                        src={img.fileUrl}
+                        alt={img.fileName}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '14px' }}>
+                  Chưa có ảnh nào
+                </div>
+              )}
+            </div>
+
+            {/* File Section */}
+            <div style={{ marginBottom: '30px' }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '15px'
+              }}>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>File</h4>
+                {conversationFiles.length > 0 && (
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                    {conversationFiles.length} file
+                  </span>
+                )}
+              </div>
+              
+              {loadingAttachments ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+                  Đang tải...
+                </div>
+              ) : conversationFiles.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {conversationFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      style={{
+                        padding: '12px',
+                        background: '#f9fafb',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        cursor: 'pointer',
+                        transition: '0.2s'
+                      }}
+                      onClick={() => window.open(file.fileUrl, '_blank')}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#f9fafb'}
+                    >
+                      <FileText size={24} color="#7360f2" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          fontWeight: '500',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {file.fileName}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {file.fileSize ? `${(file.fileSize / 1024).toFixed(1)} KB` : 'Unknown size'}
+                        </div>
+                      </div>
+                      <Download size={18} color="#6b7280" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af', fontSize: '14px' }}>
+                  Chưa có file nào
+                </div>
+              )}
+            </div>
+
+            {/* Actions Section */}
+            <div style={{ 
+              borderTop: '1px solid #e5e7eb', 
+              paddingTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              {currentChat.type === "DIRECT" ? (
+                // Actions cho bạn bè (DIRECT)
+                <>
+                  <button
+                    onClick={handleToggleBlock}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: blockedUserIds.includes(currentChat.participantId)
+                        ? '#e5e7eb'
+                        : '#fee2e2',
+                      color: blockedUserIds.includes(currentChat.participantId)
+                        ? '#4b5563'
+                        : '#dc2626',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = blockedUserIds.includes(currentChat.participantId)
+                        ? '#d1d5db'
+                        : '#fecaca';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = blockedUserIds.includes(currentChat.participantId)
+                        ? '#e5e7eb'
+                        : '#fee2e2';
+                    }}
+                  >
+                    <Trash2 size={18} />
+                    {blockedUserIds.includes(currentChat.participantId)
+                      ? 'Bỏ chặn người này'
+                      : 'Chặn người này'}
+                  </button>
+
+                  <button
+                    onClick={handleDeleteConversationHistory}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
+                  >
+                    <Trash2 size={18} />
+                    Xóa lịch sử trò chuyện
+                  </button>
+                </>
+              ) : (
+                // Actions cho nhóm
+                <>
+                  <button
+                    onClick={() => handleLeaveGroup(false)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: '#fef3c7',
+                      color: '#d97706',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fde68a'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fef3c7'}
+                  >
+                    <LeaveIcon size={18} />
+                    Rời nhóm
+                  </button>
+                  <button
+                    onClick={() => handleLeaveGroup(true)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      fontWeight: '500',
+                      transition: '0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
+                  >
+                    <Trash2 size={18} />
+                    Rời nhóm và xóa lịch sử
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Click outside để đóng menu */}
+      {(showPlusMenu || showEmojiPicker) && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999
+          }}
+          onClick={() => {
+            setShowPlusMenu(false);
+            setShowEmojiPicker(false);
+          }}
+        />
+      )}
     </div>
   );
 };

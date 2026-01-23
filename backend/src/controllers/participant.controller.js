@@ -46,6 +46,83 @@ class ParticipantController {
         }
     }
 
+    // Rời nhóm (self leave) - có thể xóa lịch sử
+    static async leaveGroup(req, res) {
+        try {
+            const conversationId = Number(req.params.conversationId);
+            const userId = req.user?.userId || req.user?.id;
+            const { deleteHistory } = req.body; // true/false
+
+            if (!userId) {
+                return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này" });
+            }
+
+            // Kiểm tra conversation có phải là GROUP không
+            const prisma = require("../config/prisma");
+            const conversation = await prisma.conversation.findUnique({
+                where: { id: conversationId },
+                include: {
+                    participants: {
+                        include: {
+                            user: {
+                                select: { id: true, fullName: true, username: true }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!conversation) {
+                return res.status(404).json({ error: "Không tìm thấy cuộc trò chuyện" });
+            }
+
+            if (conversation.type !== "GROUP") {
+                return res.status(400).json({ error: "Chỉ có thể rời nhóm, không thể rời cuộc trò chuyện cá nhân" });
+            }
+
+            // Lấy thông tin user đang rời nhóm
+            const leavingUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, fullName: true, username: true }
+            });
+
+            // Nếu muốn xóa lịch sử, gọi MessageService
+            if (deleteHistory) {
+                const MessageService = require("../services/message.service");
+                await MessageService.deleteAllByConversation(conversationId, userId);
+            }
+
+            // Rời nhóm
+            await ParticipantService.removeParticipant(userId, conversationId);
+
+            // Tạo system message thông báo người dùng đã rời nhóm
+            const MessageService = require("../services/message.service");
+            const systemMessage = await MessageService.create({
+                content: `"${leavingUser?.fullName || leavingUser?.username || 'Người dùng'}" đã rời khỏi nhóm.`,
+                senderId: userId, // Dùng userId của người rời để hiển thị tên
+                conversationId: conversationId,
+                attachments: []
+            });
+
+            // Broadcast system message đến tất cả thành viên còn lại trong nhóm
+            const io = req.app.get("io");
+            if (io) {
+                const roomName = `conversation_${conversationId}`;
+                io.to(roomName).emit("new message", systemMessage);
+            }
+            
+            res.json({ 
+                message: deleteHistory 
+                    ? "Đã rời nhóm và xóa lịch sử trò chuyện" 
+                    : "Đã rời nhóm thành công",
+                systemMessage: systemMessage
+            });
+        } catch (err) {
+            console.error("Lỗi rời nhóm:", err);
+            res.status(400).json({ error: err.message });
+        }
+    }
+
     // Cập nhật vai trò (Admin/Member)
     static async updateRole(req, res) {
         try {

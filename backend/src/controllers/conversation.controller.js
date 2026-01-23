@@ -1,13 +1,17 @@
 const ConversationService = require("../services/conversation.service");
 
 class ConversationController {
-    // CREATE
-    static async create(req,res) {
+    static async createDirect(req, res) {
         try {
-            const convo = await ConversationService.create(req.body);
-            res.status(201).json(convo);
-        } catch(err) {
-            res.status(400).json({error: err.message});
+            const senderId = req.user.userId; // Lấy từ authMiddleware
+            const { receiverId } = req.body;
+
+            if (!receiverId) return res.status(400).json({ error: "Missing receiverId" });
+
+            const conversation = await ConversationService.createDirect(senderId, receiverId);
+            res.status(201).json(conversation);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
         }
     }
 
@@ -38,43 +42,61 @@ class ConversationController {
     }
 
     // READ: ALL 
-    static async getAll(req,res) {
-        try {
-            const userId = req.user?.userId || req.user?.id;
-            const convos = await ConversationService.getAll(Number(userId));
-            res.json(convos);
-        } catch(err) {
-            res.status(500).json({error: err.message});
+        static async getAll(req, res) {
+            try {
+                // 1. Lấy ID thô từ middleware
+                const rawUserId = req.user?.userId || req.user?.id;
+                
+                // 2. Ép kiểu sang số
+                const userId = Number(rawUserId);
+
+                // 3. Kiểm tra tính hợp lệ của ID
+                if (!userId || isNaN(userId)) {
+                    return res.status(401).json({ error: "Xác thực người dùng thất bại hoặc ID không hợp lệ" });
+                }
+
+                // 4. Gọi Service với ID đã được làm sạch
+                const convos = await ConversationService.getAll(userId);
+                res.json(convos);
+            } catch (err) {
+                console.error("Lỗi Controller getAll:", err);
+                res.status(500).json({ error: err.message });
+            }
         }
-    } 
-    //READ: Id 
-    static async getById(req,res) {
+    // 3. LẤY CHI TIẾT 1 HỘI THOẠI
+    static async getById(req, res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.getById(id);
-            if (!convo) return res.status(404).json({ error: "Không tìm thấy!" });
-        }catch(err) {
+            
+            if (!convo) return res.status(404).json({ error: "Không tìm thấy hội thoại!" });
+            
+            // SỬA LỖI: Thêm dòng này để trả dữ liệu về
+            res.json(convo); 
+        } catch (err) {
             res.status(400).json({ error: err.message });
         }
     }
-    // UPDATE 
-    static async update(req,res) {
+
+    // 4. CẬP NHẬT (Ví dụ đổi tên nhóm chat)
+    static async update(req, res) {
         try {
             const id = Number(req.params.id);
             const convo = await ConversationService.update(id, req.body);
             res.json(convo);
-        } catch(err) {
+        } catch (err) {
             res.status(400).json({ error: err.message });
         }
     }
-    // DELETE 
-    static async remove(req,res) {
+
+    // 5. XÓA HỘI THOẠI
+    static async remove(req, res) {
         try {
             const id = Number(req.params.id);
-            const convo = await ConversationService.delete(id);
-            res.json({ message: "Đã xóa!", convo });
-        } catch(err) {
-            res.status(400).json({error: err.message});
+            await ConversationService.delete(id);
+            res.json({ message: "Đã xóa hội thoại!" });
+        } catch (err) {
+            res.status(400).json({ error: err.message });
         }
     }
 }

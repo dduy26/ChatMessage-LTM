@@ -75,13 +75,26 @@ class AuthController {
             }
 
             // 2. Kiểm tra email/username đã tồn tại chưa
-            const existingUser = await prisma.user.findFirst({
-                where: { OR: [{ email }, { username }] }
-            });
-            if (existingUser) {
-                return res.status(400).json({ error: "Email hoặc Username đã được sử dụng" });
+const existingEmail = await prisma.user.findUnique({ where: { email } });
+            if (existingEmail) {
+                return res.status(400).json({ error: "Email này đã được sử dụng" });
             }
 
+            // 2. Check Username
+            const existingUsername = await prisma.user.findUnique({ where: { username } });
+            if (existingUsername) {
+                return res.status(400).json({ error: "Username này đã được sử dụng" });
+            }
+
+            // 3. Check Phone (Chỉ check nếu có gửi lên)
+            if (phoneNumber) {
+                // Dùng findFirst vì phoneNumber có thể không phải là @unique trong schema cũ
+                // Nếu schema bạn đã để @unique cho phoneNumber thì dùng findUnique càng tốt
+                const existingPhone = await prisma.user.findFirst({ where: { phoneNumber } });
+                if (existingPhone) {
+                    return res.status(400).json({ error: "Số điện thoại này đã được sử dụng" });
+                }
+            }
             // 3. Mã hóa mật khẩu
             const hashedPassword = await bcrypt.hash(password, 10);
 

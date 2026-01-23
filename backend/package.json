@@ -7,12 +7,15 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "start:with-db": "npx prisma generate && npx prisma db push && node server.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push"
   },
   "dependencies": {
-    "@prisma/client": "^5.2.0",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
@@ -20,11 +23,12 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.10.1",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
-    "prisma": "^5.2.0"
+    "prisma": "^5.22.0"
   }
 }

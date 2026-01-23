@@ -37,7 +37,7 @@ ALTER ROLE chatapp CREATEDB;
 npm install dotenv
 npm install socket.io
 
-# 1. Dừng và xóa sạch Container, Networks và đặc biệt là Volume (-v)
+# 1. Dừng và xóa sạch Container , db, Networks và đặc biệt là Volume (-v)
 docker-compose down -v
 # 2. Xóa các bản build cũ để Docker đóng gói lại từ đầu
 docker-compose build --no-cache
@@ -45,6 +45,7 @@ docker-compose build --no-cache
 docker-compose up -d
 # 4. Đẩy Schema Prisma vào Database mới (chatapp_db)
 docker exec -it chat-app-backend npx prisma db push
+# run docker
 docker-compose up --build
 docker-compose up
 docker-compose up -d --build

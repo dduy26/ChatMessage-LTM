@@ -11,9 +11,6 @@ if (savedToken) {
 const api = axios.create({
     baseURL: 'http://localhost:5000/api', 
     withCredentials: true,
-    headers: {
-        'Content-Type': 'application/json',
-    },
 });
 
 api.interceptors.request.use(
@@ -81,5 +78,31 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+export const sendMessage = async (chatId, content, files) => {
+    const formData = new FormData();
+    formData.append("content", content); // Gửi nội dung chữ
+    
+    if (files && files.length > 0) {
+        files.forEach(file => {
+            formData.append("files", file); // Phải dùng key 'files' để khớp với Multer ở BE
+        });
+    }
+
+    // Lưu ý: api ở đây là instance của axios bạn đã tạo sẵn
+    return await api.post(`/messages/${chatId}`, formData, {
+        headers: {
+            "Content-Type": "multipart/form-data", // Ép kiểu để gửi file
+        },
+    });
+};
+
+// Block / unblock user
+export const blockUser = (blockedId) =>
+    api.post("/blocklist/block", { blockedId });
+
+export const unblockUser = (blockedId) =>
+    api.post("/blocklist/unblock", { blockedId });
+
+export const getMyBlockList = () => api.get("/blocklist/me");
 
 export default api;

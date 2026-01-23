@@ -32,10 +32,18 @@ class FriendshipController{
                 return res.status(400).json({ error: "Email không hợp lệ" });
             }
 
+            // Lấy io instance từ app để gửi real-time notification
+            const io = req.app.get("io");
+            
+            if (!io) {
+                console.warn("[Friendship] Socket.IO instance không có sẵn, thông báo real-time sẽ không hoạt động");
+            }
+
             // Gọi service xử lý tìm kiếm và tạo lời mời
             const result = await FriendshipService.sendRequestByEmail(
                 parseInt(senderId),
-                email.trim()
+                email.trim(),
+                io
             );
             
             res.status(201).json({ 

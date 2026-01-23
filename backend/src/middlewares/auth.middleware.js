@@ -6,19 +6,19 @@ const authMiddleware = async (req, res, next) => {
         const authHeader = req.headers.authorization;
         
         if (!authHeader) {
-            console.log("❌ Không có Authorization header");
+            console.log(" Không có Authorization header");
             return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này!" });
         }
 
         if (!authHeader.startsWith('Bearer ')) {
-            console.log("❌ Authorization header không đúng format (thiếu 'Bearer ')");
+            console.log(" Authorization header không đúng format (thiếu 'Bearer ')");
             return res.status(401).json({ error: "Token không hợp lệ!" });
         }
 
         const token = authHeader.split(' ')[1];
 
         if (!token) {
-            console.log("❌ Không có token sau 'Bearer '");
+            console.log(" Không có token sau 'Bearer '");
             return res.status(401).json({ error: "Bạn cần đăng nhập để thực hiện thao tác này!" });
         }
 
@@ -27,7 +27,7 @@ const authMiddleware = async (req, res, next) => {
         });
 
         if (isBlacklisted) {
-            console.log("❌ Token đã bị blacklist");
+            console.log(" Token đã bị blacklist");
             return res.status(401).json({ error: "Token đã bị vô hiệu hóa!" });
         }
 
@@ -41,7 +41,7 @@ const authMiddleware = async (req, res, next) => {
         console.log("✅ Token hợp lệ cho user ID:", decoded.userId);
         next();
     } catch (error) {
-        console.error("❌ Lỗi xác thực token:", error.message);
+        console.error(" Lỗi xác thực token:", error.message);
         if (error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!" });
         }
