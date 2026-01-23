@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api, { sendMessage } from "../services/api";
 import { io } from "socket.io-client";
 import { 
   MessageCircle, Phone, Settings, LogOut, Search, 
@@ -158,51 +158,46 @@ const Home = () => {
   };
 
 
-  //  Auto scroll (
+  //  Auto scroll
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  //  Gửi tin nhắn
-const handleSendMessage = async () => {
+  //  Gửi tin nhắn (text + file)
+  const handleSendMessage = async () => {
     if ((!newMessage.trim() && selectedFiles.length === 0) || !currentChat) return;
 
     try {
-        const formData = new FormData();
-        // Đảm bảo content luôn được gửi, ngay cả khi là empty string
-        formData.append("content", newMessage.trim() || "");
-        // Gửi mảng file qua key 'files' khớp với Backend
-        selectedFiles.forEach(file => formData.append("files", file));
+      const res = await sendMessage(
+        currentChat.id,
+        newMessage.trim() || "",
+        selectedFiles
+      );
 
-        const res = await api.post(`/messages/${currentChat.id}`, formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-        });
+      if (!res.data || !res.data.id) {
+        console.error("Response không hợp lệ:", res.data);
+        alert("Lỗi: Phản hồi từ server không hợp lệ");
+        return;
+      }
 
-        // Kiểm tra response có đúng format không
-        if (!res.data || !res.data.id) {
-            console.error("Response không hợp lệ:", res.data);
-            alert("Lỗi: Phản hồi từ server không hợp lệ");
-            return;
+      // Phát socket để người khác nhận được file ngay lập tức
+      socket.current.emit("send_message", res.data);
+
+      setMessages((prev) => [...prev, res.data]);
+      setNewMessage("");
+      setSelectedFiles([]);
+      // Xóa preview URLs để giải phóng memory
+      filePreviews.forEach((preview) => {
+        if (preview.url && preview.type === "image") {
+          URL.revokeObjectURL(preview.url);
         }
-
-        // Phát socket để người khác nhận được file ngay lập tức
-        socket.current.emit("send_message", res.data);
-
-        setMessages(prev => [...prev, res.data]);
-        setNewMessage("");
-        setSelectedFiles([]);
-        // Xóa preview URLs để giải phóng memory
-        filePreviews.forEach(preview => {
-          if (preview.url && preview.type === 'image') {
-            URL.revokeObjectURL(preview.url);
-          }
-        });
-        setFilePreviews([]);
+      });
+      setFilePreviews([]);
     } catch (err) {
-        console.error("Lỗi khi gửi tin nhắn:", err);
-        alert("Lỗi khi gửi tin nhắn: " + (err.response?.data?.error || err.message));
+      console.error("Lỗi khi gửi tin nhắn:", err);
+      alert("Lỗi khi gửi tin nhắn: " + (err.response?.data?.error || err.message));
     }
-};
+  };
   // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
     try {
@@ -976,7 +971,13 @@ const handleStartConversation = async (friend) => {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>Bạn</span>
-                      <img src={getAvatar(user.fullName || user.username, user.avatar)} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} alt="Bạn" />
+                      <img 
+                        src={getAvatar(user.fullName || user.username, user.avatar)} 
+                        style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }} 
+                        alt="Bạn" 
+                        onClick={() => navigate("/profile")}
+                        title="Xem hồ sơ của bạn"
+                      />
                     </div>
                     {/* GỌI HÀM RENDER - Đã sửa lỗi hiển thị tại đây */}
                     {renderMessageContent()}

@@ -13,8 +13,9 @@
     cloudinary: cloudinary,
     params: {
         folder: 'chat-app-attachments', // Thư mục sẽ hiện trên giao diện Cloudinary
-        resource_type: 'auto',         // Tự động nhận diện (ảnh, video, raw file)
-        allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'pdf', 'docx', 'xlsx', 'zip'],
+        // Để Cloudinary tự nhận định dạng (ảnh, video, file tài liệu, v.v.)
+        // và không tự giới hạn theo extension thủ công.
+        resource_type: 'auto',
     },
     });
 
