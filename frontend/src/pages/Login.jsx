@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
-import logo from "../assets/react.svg"; 
+import TalkieLogo from "../components/TalkieLogo";
 import { Eye, EyeOff } from "lucide-react"; 
 
 const Login = () => {
@@ -46,8 +46,9 @@ const Login = () => {
     <div style={{ height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)" }}>
       <div style={{ backgroundColor: "rgba(255,255,255,0.9)", padding: "40px", borderRadius: "24px", width: "400px", boxShadow: "0 10px 25px rgba(0,0,0,0.1)", textAlign: "center", backdropFilter: "blur(10px)" }}>
         
-        <img src={logo} alt="App Logo" style={{ width: "80px", marginBottom: "20px" }} />
-        <h2 style={{ color: "#7360f2", marginBottom: "30px", fontSize: "24px", fontWeight:"bold" }}>Đăng nhập Chat App</h2>
+        {/* Logo Talkie ở trên đầu tiên */}
+        <TalkieLogo size={100} />
+        <h2 style={{ color: "#7360f2", marginBottom: "30px", fontSize: "24px", fontWeight:"bold" }}>Đăng nhập</h2>
 
         {error && (
           <div style={{ color: "#721c24", backgroundColor: "#f8d7da", border: "1px solid #f5c6cb", padding: "10px", borderRadius: "8px", marginBottom: "15px", fontSize: "14px" }}>

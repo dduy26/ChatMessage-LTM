@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
-import logo from "../assets/react.svg"; 
+import TalkieLogo from "../components/TalkieLogo"; 
 
 const Register = () => {
   const navigate = useNavigate();
@@ -70,7 +70,8 @@ const Register = () => {
       {/* 2. Card hiệu ứng kính mờ */}
       <div style={{ backgroundColor: "rgba(255,255,255,0.9)", padding: "40px", borderRadius: "24px", width: "400px", boxShadow: "0 10px 25px rgba(0,0,0,0.1)", textAlign: "center", backdropFilter: "blur(10px)" }}>
         
-        <img src={logo} alt="Logo" style={{ width: "60px", marginBottom: "10px" }} />
+        {/* Logo Talkie ở trên đầu tiên */}
+        <TalkieLogo size={100} />
         <h2 style={{ color: "#7360f2", marginBottom: "20px", fontWeight: "bold" }}>Tạo tài khoản mới</h2>
 
         {error && <div style={{ color: "red", marginBottom: "15px", fontSize: "14px", background:"#fee2e2", padding:"10px", borderRadius:"8px" }}>{error}</div>}
