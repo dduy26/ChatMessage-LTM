@@ -52,6 +52,7 @@ const Home = () => {
   const [selectedFiles, setSelectedFiles] = useState([]); // Lưu trữ file đã chọn
   const [filePreviews, setFilePreviews] = useState([]); // Lưu trữ preview URLs cho hiển thị
   const fileInputRef = useRef(); // Ref để kích hoạt input file ẩn
+  const [selectedImage, setSelectedImage] = useState(null); // Lưu URL ảnh để phóng to
   useEffect(() => {currentChatRef.current = currentChat;}, [currentChat]);
     useEffect(() => {
     // Khởi tạo kết nối
@@ -61,22 +62,27 @@ const Home = () => {
     });
 
     socket.current.on("new message", (msg) => {
-      const activeChat = currentChatRef.current;
-      if (!activeChat || activeChat.id !== msg.conversationId) return;
+    const activeChat = currentChatRef.current;
+    if (!activeChat || activeChat.id !== msg.conversationId) return;
 
-      // Kiểm tra xem có phải system message (thông báo rời nhóm) không
-      const isSystemMessage = msg.content && (
-        msg.content.includes("đã rời khỏi nhóm") || 
-        msg.content.includes("đã rời nhóm") ||
-        msg.content.includes("Bạn đã rời khỏi nhóm")
-      );
+    setMessages(prev => {
+        // KIỂM TRA TRÙNG LẶP THEO ID
+        const isExisted = prev.find(m => m.id === msg.id);
+        if (isExisted) return prev;
 
-      // System message luôn hiển thị, không chặn
-      // Tin nhắn thường: chặn tin của chính mình (đã được gửi từ handleSendMessage)
-      if (!isSystemMessage && msg.senderId === user.id) return;
+        const isSystemMessage = msg.content && (
+            msg.content.includes("đã rời khỏi nhóm") || 
+            msg.content.includes("đã rời nhóm") ||
+            msg.content.includes("Bạn đã rời khỏi nhóm")
+        );
 
-      setMessages(prev => [...prev, msg]);
+        // Nếu sender là mình (người gửi), và mình đã gọi setMessages trong handleSendMessage rồi 
+        // thì return prev. Nếu đã xóa setMessages ở hàm gửi thì xóa dòng này đi.
+        //if (!isSystemMessage && msg.senderId === user.id) return prev;
+
+        return [...prev, msg]; // Chỉ thêm tin nhắn ở đây là đủ
     });
+});
 
     // Lắng nghe tin nhắn mới
     socket.current.on("user_status_change", (data) => {
@@ -192,7 +198,7 @@ const Home = () => {
       // Phát socket để người khác nhận được file ngay lập tức
       socket.current.emit("send_message", res.data);
 
-      setMessages((prev) => [...prev, res.data]);
+      //setMessages((prev) => [...prev, res.data]);
       setNewMessage("");
       setSelectedFiles([]);
       // Xóa preview URLs để giải phóng memory
@@ -307,8 +313,12 @@ const Home = () => {
     try {
       await api.put(`/friendships/accept/${requestId}`);
       alert("Đã đồng ý kết bạn!");
-      fetchPendingRequests(); // Load lại danh sách lời mời
-      fetchFriends(); // Load lại danh sách bạn bè
+
+      await Promise.all([
+      fetchConversations(), // Load lại danh sách conversations , sau khi kết bạn
+      fetchPendingRequests(), // Load lại danh sách lời mời
+      fetchFriends() // Load lại danh sách bạn bè
+      ]);
     } catch { alert("Lỗi xác nhận"); }
   };
 
@@ -994,6 +1004,7 @@ const handleStartConversation = async (friend) => {
               if (!hasContent && !hasAttachments) {
                 return null;
               }
+              
 
               return (
                 <div className="msg-bubble" style={{ marginRight: isMe ? '40px' : 0 }}>
@@ -1729,7 +1740,21 @@ const handleStartConversation = async (friend) => {
           }}
         />
       )}
+      {selectedImage && (
+    <div 
+        className="fixed inset-0 z-[999] bg-black bg-opacity-90 flex items-center justify-center p-4"
+        onClick={() => setSelectedImage(null)} // Click ra ngoài để đóng
+      >
+        <button className="absolute top-4 right-4 text-white text-3xl">&times;</button>
+        <img 
+          src={selectedImage} 
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-zoomIn"
+          alt="Phóng to" 
+        />
+      </div>
+    )}
     </div>
+    
   );
 };
 

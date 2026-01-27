@@ -50,7 +50,7 @@ module.exports = (io) => {
         socket.on("send_message", (newMessage) => {
             const roomName = `conversation_${newMessage.conversationId}`;
             // Gửi tin nhắn đến mọi người trong phòng trừ người gửi
-            socket.to(roomName).emit("new message", newMessage);
+            io.to(roomName).emit("new message", newMessage);
         });
 
         socket.on("disconnect", async () => {

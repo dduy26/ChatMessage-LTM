@@ -19,7 +19,7 @@ if (missingEnvVars.length > 0) {
 console.log(' Tất cả biến môi trường bắt buộc đã được cấu hình');
 console.log(' Database URL:', process.env.DATABASE_URL ? 'Đã cấu hình' : 'Chưa cấu hình');
 console.log(' JWT_SECRET:', process.env.JWT_SECRET ? 'Đã cấu hình' : 'Chưa cấu hình');
-
+// Tạo server HTTP
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
