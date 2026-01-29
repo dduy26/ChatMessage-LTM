@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const socketManager = require('./src/socket/socketManager');
 
 // Kiểm tra biến môi trường quan trọng khi khởi động
-const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL', 'ENCRYPTION_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -19,6 +19,7 @@ if (missingEnvVars.length > 0) {
 console.log(' Tất cả biến môi trường bắt buộc đã được cấu hình');
 console.log(' Database URL:', process.env.DATABASE_URL ? 'Đã cấu hình' : 'Chưa cấu hình');
 console.log(' JWT_SECRET:', process.env.JWT_SECRET ? 'Đã cấu hình' : 'Chưa cấu hình');
+console.log(' ENCRYPTION_KEY:', process.env.ENCRYPTION_KEY ? 'Đã cấu hình' : 'Chưa cấu hình');
 
 const PORT = process.env.PORT || 5000;
 

@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { decryptText } = require("../utils/encryption");
 
 class ReportService {
     // Tạo báo cáo mới
@@ -20,7 +21,7 @@ class ReportService {
 
     // Lấy tất cả báo cáo (Cho Admin)
     static async getAll() {
-        return await prisma.report.findMany({
+        const reports = await prisma.report.findMany({
             include: {
                 reporter: { select: { id: true, username: true, fullName: true } },
                 reportedUser: { select: { id: true, username: true } },
@@ -29,11 +30,18 @@ class ReportService {
             },
             orderBy: { createdAt: "desc" }
         });
+
+        return (reports || []).map((r) => ({
+            ...r,
+            message: r.message
+                ? { ...r.message, content: decryptText(r.message.content) }
+                : r.message,
+        }));
     }
 
     // Lấy chi tiết một báo cáo
     static async getById(id) {
-        return await prisma.report.findUnique({
+        const report = await prisma.report.findUnique({
             where: { id: Number(id) },
             include: {
                 reporter: true,
@@ -42,6 +50,12 @@ class ReportService {
                 message: true
             }
         });
+
+        if (!report) return report;
+        if (report.message && report.message.content != null) {
+            report.message = { ...report.message, content: decryptText(report.message.content) };
+        }
+        return report;
     }
 
     // Cập nhật trạng thái báo cáo (Ví dụ: Đã xử lý)

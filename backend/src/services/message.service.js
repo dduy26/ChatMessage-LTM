@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { encryptText, decryptText } = require("../utils/encryption");
 
 class MessageService {
     static async create(data, files = []) {
@@ -6,11 +7,11 @@ class MessageService {
         const { content, senderId, conversationId, attachments } = data;
 
         try {
-            return await prisma.message.create({
+            const created = await prisma.message.create({
                 data: {
                     // Sử dụng content || "" để tránh lỗi 'Argument content is missing' 
                     // nếu người dùng chỉ gửi ảnh mà không nhắn chữ
-                    content: content || "", 
+                    content: encryptText(content || ""), 
                     senderId: parseInt(senderId),
                     conversationId: parseInt(conversationId),
                     attachments: {
@@ -30,6 +31,9 @@ class MessageService {
                     } 
                 }
             });
+
+            // Trả về plaintext cho client
+            return { ...created, content: decryptText(created.content) };
         } catch (error) {
             console.error("[MessageService] Lỗi khi tạo message:", error);
             console.error("[MessageService] Data:", JSON.stringify(data, null, 2));
@@ -38,7 +42,7 @@ class MessageService {
     }
 
     // Lọc tin nhắn để không hiện những tin mà Participant này đã "Xóa phía tôi"
-    static getByConversation(conversationId, participantId = null) {
+    static async getByConversation(conversationId, participantId = null) {
         const whereClause = { conversationId: Number(conversationId) };
 
         if (participantId) {
@@ -49,7 +53,7 @@ class MessageService {
             };
         }
 
-        return prisma.message.findMany({
+        const messages = await prisma.message.findMany({
             where: whereClause,
             include: { 
                 attachments: true, // Lấy kèm file đính kèm
@@ -65,19 +69,31 @@ class MessageService {
             },
             orderBy: { createdAt: "asc" },
         });
+
+        return (messages || []).map((m) => ({
+            ...m,
+            content: decryptText(m.content),
+        }));
     }
 
-    static getById(id) {
-        return prisma.message.findUnique({
+    static async getById(id) {
+        const msg = await prisma.message.findUnique({
             where: { id: Number(id) },
             include: { attachments: true }
         });
+        if (!msg) return msg;
+        return { ...msg, content: decryptText(msg.content) };
     }
 
     static update(id, data) {
+        const updateData = { ...data };
+        if (Object.prototype.hasOwnProperty.call(updateData, "content")) {
+            updateData.content = encryptText(updateData.content || "");
+        }
+
         return prisma.message.update({
             where: { id: Number(id) },
-            data,
+            data: updateData,
         });
     }
 

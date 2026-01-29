@@ -52,6 +52,7 @@ const Home = () => {
   const [selectedFiles, setSelectedFiles] = useState([]); // Lưu trữ file đã chọn
   const [filePreviews, setFilePreviews] = useState([]); // Lưu trữ preview URLs cho hiển thị
   const fileInputRef = useRef(); // Ref để kích hoạt input file ẩn
+  const [selectedImage, setSelectedImage] = useState(null); // Lưu URL ảnh để phóng to
   useEffect(() => {currentChatRef.current = currentChat;}, [currentChat]);
     useEffect(() => {
     // Khởi tạo kết nối
@@ -61,22 +62,23 @@ const Home = () => {
     });
 
     socket.current.on("new message", (msg) => {
-      const activeChat = currentChatRef.current;
-      if (!activeChat || activeChat.id !== msg.conversationId) return;
+    const activeChat = currentChatRef.current;
+    if (!activeChat || activeChat.id !== msg.conversationId) return;
 
-      // Kiểm tra xem có phải system message (thông báo rời nhóm) không
-      const isSystemMessage = msg.content && (
-        msg.content.includes("đã rời khỏi nhóm") || 
-        msg.content.includes("đã rời nhóm") ||
-        msg.content.includes("Bạn đã rời khỏi nhóm")
-      );
+    setMessages(prev => {
+        // KIỂM TRA TRÙNG LẶP THEO ID
+        const isExisted = prev.find(m => m.id === msg.id);
+        if (isExisted) return prev;
 
-      // System message luôn hiển thị, không chặn
-      // Tin nhắn thường: chặn tin của chính mình (đã được gửi từ handleSendMessage)
-      if (!isSystemMessage && msg.senderId === user.id) return;
+        // Nếu sender là mình (người gửi), mình đã append message ở handleSendMessage rồi
+        // nên không cần append thêm từ socket.
+        // (System message thì vẫn cho phép hiển thị, nhưng hiện tại system message được tạo từ backend
+        // và sẽ không bị trùng theo ID)
+        if (msg.senderId === user.id) return prev;
 
-      setMessages(prev => [...prev, msg]);
+        return [...prev, msg]; // Chỉ thêm tin nhắn ở đây là đủ
     });
+});
 
     // Lắng nghe tin nhắn mới
     socket.current.on("user_status_change", (data) => {
@@ -108,10 +110,11 @@ const Home = () => {
     // Fetch dữ liệu ban đầu
     const initData = async () => {
       try {
-        const res = await api.get("/conversations");
-        setConversations(res.data);
-        fetchPendingRequests();
-        fetchFriends();
+        await Promise.all([
+          fetchConversations(),
+          fetchPendingRequests(),
+          fetchFriends()
+        ]);
       } catch (err) { console.error(err); }
     };
     initData();
@@ -158,6 +161,19 @@ const Home = () => {
     } catch (err) { console.error("Lỗi lấy lời mời:", err); }
   };
 
+  // Load lại danh sách conversations
+  const fetchConversations = async () => {
+    try {
+      const res = await api.get("/conversations");
+      setConversations(res.data || []);
+      return res.data || [];
+    } catch (err) {
+      console.error("Lỗi lấy danh sách cuộc trò chuyện:", err);
+      setConversations([]);
+      return [];
+    }
+  };
+
   // Logic lấy danh sách bạn bè
   const fetchFriends = async () => {
     try {
@@ -192,7 +208,12 @@ const Home = () => {
       // Phát socket để người khác nhận được file ngay lập tức
       socket.current.emit("send_message", res.data);
 
-      setMessages((prev) => [...prev, res.data]);
+      // Realtime: hiển thị ngay cho người gửi (không cần reload)
+      setMessages((prev) => {
+        const isExisted = prev.find((m) => m.id === res.data.id);
+        if (isExisted) return prev;
+        return [...prev, res.data];
+      });
       setNewMessage("");
       setSelectedFiles([]);
       // Xóa preview URLs để giải phóng memory
@@ -206,6 +227,13 @@ const Home = () => {
       console.error("Lỗi khi gửi tin nhắn:", err);
       alert("Lỗi khi gửi tin nhắn: " + (err.response?.data?.error || err.message));
     }
+  };
+
+  const formatMessageTime = (createdAt) => {
+    if (!createdAt) return "";
+    const d = new Date(createdAt);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
   // 5. Đăng xuất (Giữ nguyên)
   const handleLogout = async () => {
@@ -307,8 +335,12 @@ const Home = () => {
     try {
       await api.put(`/friendships/accept/${requestId}`);
       alert("Đã đồng ý kết bạn!");
-      fetchPendingRequests(); // Load lại danh sách lời mời
-      fetchFriends(); // Load lại danh sách bạn bè
+
+      await Promise.all([
+      fetchConversations(), // Load lại danh sách conversations , sau khi kết bạn
+      fetchPendingRequests(), // Load lại danh sách lời mời
+      fetchFriends() // Load lại danh sách bạn bè
+      ]);
     } catch { alert("Lỗi xác nhận"); }
   };
 
@@ -994,6 +1026,7 @@ const handleStartConversation = async (friend) => {
               if (!hasContent && !hasAttachments) {
                 return null;
               }
+              
 
               return (
                 <div className="msg-bubble" style={{ marginRight: isMe ? '40px' : 0 }}>
@@ -1020,6 +1053,11 @@ const handleStartConversation = async (friend) => {
                       ))}
                     </div>
                   )}
+
+                  {/* Thời gian gửi */}
+                  <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
+                    {formatMessageTime(msg.createdAt)}
+                  </div>
                 </div>
               );
             };
@@ -1729,7 +1767,21 @@ const handleStartConversation = async (friend) => {
           }}
         />
       )}
+      {selectedImage && (
+    <div 
+        className="fixed inset-0 z-[999] bg-black bg-opacity-90 flex items-center justify-center p-4"
+        onClick={() => setSelectedImage(null)} // Click ra ngoài để đóng
+      >
+        <button className="absolute top-4 right-4 text-white text-3xl">&times;</button>
+        <img 
+          src={selectedImage} 
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-zoomIn"
+          alt="Phóng to" 
+        />
+      </div>
+    )}
     </div>
+    
   );
 };
 

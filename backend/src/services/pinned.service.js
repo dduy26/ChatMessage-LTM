@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { decryptText } = require("../utils/encryption");
 
 class PinnedService {
     // Ghim hoặc Bỏ ghim (Toggle)
@@ -36,7 +37,7 @@ class PinnedService {
 
     // Lấy danh sách đã ghim của một User
     static async getPinnedByUserId(userId) {
-        return await prisma.pinnedConversation.findMany({
+        const pinned = await prisma.pinnedConversation.findMany({
             where: { userId: Number(userId) },
             include: {
                 conversation: {
@@ -46,6 +47,20 @@ class PinnedService {
                 }
             }
         });
+
+        // Decrypt preview message content
+        return (pinned || []).map((p) => ({
+            ...p,
+            conversation: p.conversation
+                ? {
+                      ...p.conversation,
+                      messages: (p.conversation.messages || []).map((m) => ({
+                          ...m,
+                          content: decryptText(m.content),
+                      })),
+                  }
+                : p.conversation,
+        }));
     }
 
     // Xóa tất cả ghim 

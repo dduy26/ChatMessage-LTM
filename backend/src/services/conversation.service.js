@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { decryptText } = require("../utils/encryption");
 
 class ConversationService {
     
@@ -141,6 +142,10 @@ class ConversationService {
         }).then(conversations => {
             // Transform conversations để dễ sử dụng ở frontend
             return conversations.map(conv => {
+                const lastMessage = conv.messages?.[0]
+                    ? { ...conv.messages[0], content: decryptText(conv.messages[0].content) }
+                    : null;
+
                 if (conv.type === "GROUP") {
                     return {
                         id: conv.id,
@@ -157,7 +162,7 @@ class ConversationService {
                             isOnline: p.user.isOnline
                         })),
                         createdAt: conv.createdAt,
-                        lastMessage: conv.messages[0] || null
+                        lastMessage
                     };
                 }
 
@@ -173,7 +178,7 @@ class ConversationService {
                     participantId: otherUser?.id,
                     isOnline: otherUser?.isOnline || false,
                     createdAt: conv.createdAt,
-                    lastMessage: conv.messages[0] || null
+                    lastMessage
                 };
             });
         });
@@ -181,7 +186,7 @@ class ConversationService {
 
     // 2. Lấy danh sách hội thoại MÀ USER ĐANG THAM GIA (Thay cho getAll)
     static async getByUserId(userId) {
-        return await prisma.conversation.findMany({
+        const conversations = await prisma.conversation.findMany({
             where: {
                 participants: {
                     some: { userId: Number(userId) }
@@ -200,6 +205,12 @@ class ConversationService {
             },
             orderBy: { createdAt: 'desc' } // Chat nào mới nhất lên đầu
         });
+
+        // Decrypt preview message content
+        return (conversations || []).map((c) => ({
+            ...c,
+            messages: (c.messages || []).map((m) => ({ ...m, content: decryptText(m.content) })),
+        }));
     }
 
     // 3. Lấy chi tiết 1 hội thoại (Kèm tin nhắn và thành viên)
